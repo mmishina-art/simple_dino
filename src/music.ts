@@ -14,7 +14,10 @@ let desired: SongId | null = null;
 interface Running {
   id: SongId;
   song: Song;
+  /** 全体の音量(ここから出力へ) */
   bus: GainNode;
+  /** 音の出口(メロディー・ベース・伴奏)。高い音をやわらげるフィルターを通る。ドラムは bus に直接つなぐ */
+  tones: BiquadFilterNode;
   byStep: Map<number, NoteEvent[]>;
   steps: number;
   stepSec: number;
@@ -30,6 +33,8 @@ let noise: AudioBuffer | undefined;
 const LOOKAHEAD = 0.2;
 const TICK_MS = 40;
 const MASTER_GAIN = 0.55;
+/** 高い音をやわらげる(ローパス)境目の周波数(Hz)。小さいほどマイルド */
+const SOFTEN_HZ = 3200;
 
 export const isMusicOn = (): boolean => enabled;
 
@@ -84,7 +89,12 @@ function startDesired(delay = 0): void {
   const bus = ctx.createGain();
   bus.gain.value = MASTER_GAIN;
   bus.connect(ctx.destination);
-  const r: Running = { id: song.id, song, bus, byStep, steps: songSteps(song), stepSec: stepSeconds(song), t0: ctx.currentTime + 0.06 + delay, next: 0, timer: 0 };
+  const tones = ctx.createBiquadFilter();
+  tones.type = 'lowpass';
+  tones.frequency.value = SOFTEN_HZ;
+  tones.Q.value = 0.5;
+  tones.connect(bus);
+  const r: Running = { id: song.id, song, bus, tones, byStep, steps: songSteps(song), stepSec: stepSeconds(song), t0: ctx.currentTime + 0.06 + delay, next: 0, timer: 0 };
   r.timer = window.setInterval(() => tick(ctx, r), TICK_MS);
   running = r;
   tick(ctx, r);
@@ -121,22 +131,22 @@ function play(ctx: AudioContext, r: Running, e: NoteEvent, at: number): void {
   const dur = e.len * r.stepSec;
   switch (e.voice) {
     case 'lead':
-      tone(ctx, r.bus, r.song.lead, e.freq, at, dur * (r.song.staccato ? 0.8 : 0.92), e.gain);
+      tone(ctx, r.tones, r.song.lead, e.freq, at, dur * (r.song.staccato ? 0.8 : 0.92), e.gain);
       break;
     case 'bass':
-      tone(ctx, r.bus, 'triangle', e.freq, at, dur * 0.9, e.gain);
+      tone(ctx, r.tones, 'triangle', e.freq, at, dur * 0.9, e.gain);
       break;
     case 'arp':
-      tone(ctx, r.bus, 'square', e.freq, at, dur * 0.7, e.gain);
+      tone(ctx, r.tones, 'triangle', e.freq, at, dur * 0.8, e.gain);
       break;
     case 'kick':
       kick(ctx, r.bus, at, e.gain);
       break;
     case 'snare':
-      hit(ctx, r.bus, at, 0.12, e.gain, 'bandpass', 1800);
+      hit(ctx, r.bus, at, 0.12, e.gain * 0.8, 'bandpass', 1500);
       break;
     case 'hat':
-      hit(ctx, r.bus, at, 0.04, e.gain * 0.5, 'highpass', 7000);
+      hit(ctx, r.bus, at, 0.05, e.gain * 0.3, 'bandpass', 5000);
       break;
   }
 }
@@ -148,8 +158,8 @@ function tone(ctx: AudioContext, dest: AudioNode, type: OscillatorType, freq: nu
   osc.frequency.value = freq;
   const end = at + Math.max(0.03, dur);
   g.gain.setValueAtTime(0, at);
-  g.gain.linearRampToValueAtTime(gain, at + 0.008);
-  g.gain.setTargetAtTime(gain * 0.65, at + 0.02, 0.12);
+  g.gain.linearRampToValueAtTime(gain, at + 0.016);
+  g.gain.setTargetAtTime(gain * 0.6, at + 0.03, 0.1);
   g.gain.setTargetAtTime(0, end - 0.02, 0.015);
   osc.connect(g).connect(dest);
   osc.start(at);

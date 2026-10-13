@@ -217,6 +217,10 @@ export const SONGS: readonly Song[] = [
   },
 ];
 
+/** 鳴らすときの、メロディーの高さの下げ幅(半音)。楽譜(melody)は読みやすい高さで書き、実際は 1 オクターブ下で鳴らす。
+ *  高い音域の四角波は、耳に刺さる(キンキンする)ので。 */
+export const LEAD_SHIFT = 12;
+
 export const songById = (id: SongId): Song => {
   const song = SONGS.find((s) => s.id === id);
   if (!song) throw new Error(`曲がありません: ${id}`);
@@ -299,7 +303,8 @@ export const songSteps = (song: Song): number => song.melody.length * STEPS_PER_
 export const stepSeconds = (song: Song): number => 60 / song.bpm / 4;
 
 function bassBar(style: BassStyle, root: number, base: number): { at: number; len: number; midi: number }[] {
-  const low = root - 12;
+  // 根音の高さ(C2〜B2)。小さいスピーカーでも聞こえるよう、これより低くしない
+  const low = root;
   const fifth = low + 7;
   switch (style) {
     case 'long':
@@ -348,13 +353,14 @@ export function buildEvents(song: Song): NoteEvent[] {
     for (const n of parseBar(bar)) {
       if (n.midi === null) continue;
       const len = song.staccato ? Math.max(1, Math.ceil(n.len / 2)) : n.len;
-      events.push({ step: origin + n.at, len, voice: 'lead', freq: freqOfMidi(n.midi), gain: 0.16 });
-      if (song.echo) events.push({ step: origin + n.at + 3, len: Math.min(len, 3), voice: 'lead', freq: freqOfMidi(n.midi), gain: 0.05 });
+      const freq = freqOfMidi(n.midi - LEAD_SHIFT);
+      events.push({ step: origin + n.at, len, voice: 'lead', freq, gain: 0.14 });
+      if (song.echo) events.push({ step: origin + n.at + 3, len: Math.min(len, 3), voice: 'lead', freq, gain: 0.045 });
     }
 
     // ベース
     for (const n of bassBar(song.bass, chord.root, 0)) {
-      events.push({ step: origin + n.at, len: n.len, voice: 'bass', freq: freqOfMidi(n.midi), gain: 0.22 });
+      events.push({ step: origin + n.at, len: n.len, voice: 'bass', freq: freqOfMidi(n.midi), gain: 0.26 });
     }
 
     // 伴奏(コードの音を 1 つずつ順に鳴らす)
@@ -363,7 +369,7 @@ export function buildEvents(song: Song): NoteEvent[] {
       const pattern = [0, 1, 2, 1];
       for (let i = 0; i < STEPS_PER_BAR / unit; i++) {
         const tone = chord.tones[pattern[i % pattern.length]];
-        events.push({ step: origin + i * unit, len: unit, voice: 'arp', freq: freqOfMidi(chord.root + 24 + tone), gain: 0.06 });
+        events.push({ step: origin + i * unit, len: unit, voice: 'arp', freq: freqOfMidi(chord.root + 24 + tone), gain: 0.07 });
       }
     }
 
