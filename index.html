@@ -20,18 +20,14 @@
   </head>
   <body>
     <main id="app">
-      <header class="header">
-        <h1>ダイノラン</h1>
-        <button id="sound-button" type="button" class="icon-button" aria-label="音" aria-pressed="true">🔊</button>
-      </header>
-
-      <!-- サンプル: タップ回数を数える。本番では置き換える -->
-      <section class="card">
-        <p class="count" id="count" aria-live="polite">0</p>
-        <p class="muted">最高記録: <span id="best">0</span></p>
-        <button id="tap-button" type="button" class="primary">タップ</button>
-        <button id="reset-button" type="button">リセット</button>
-      </section>
+      <!-- 最初の画面: ステージ選択 -->
+      <section id="screen-home">
+        <header class="header">
+          <h1>ダイノラン</h1>
+          <button id="sound-button" type="button" class="icon-button" aria-label="音" aria-pressed="true">🔊</button>
+        </header>
+        <p class="muted">タップでジャンプ。サボテンや岩をよけて、旗(ゴール)までたどりつこう。</p>
+        <ol id="stage-list" class="stage-list" aria-label="ステージ"></ol>
 
       <details class="backup">
         <summary>記録のバックアップ</summary>
@@ -44,6 +40,27 @@
       <button id="install-open" type="button" class="link">📲 アプリとしてインストールする方法</button>
 
       <p class="muted version">v<span id="version"></span></p>
+      </section>
+
+      <!-- ゲーム画面 -->
+      <section id="screen-game" class="game" hidden>
+        <div class="hud">
+          <button id="game-back" type="button" aria-label="ステージ選択にもどる">もどる</button>
+          <span id="game-title" class="hud-title"></span>
+        </div>
+        <div class="progress" aria-hidden="true"><div id="progress-bar" class="progress-bar"></div></div>
+        <div class="stage-wrap">
+          <canvas id="game-canvas" class="game-canvas" role="img" aria-label="ゲーム画面。走る恐竜が、サボテンや岩をジャンプでよけます"></canvas>
+          <p id="game-hint" class="game-hint">タップでスタート</p>
+        </div>
+        <div id="game-pad" class="pad" aria-hidden="true">タップ(スペースキー)でジャンプ<br /><small>押し続けると高く跳べる</small></div>
+        <div id="game-overlay" class="overlay" hidden>
+          <h2 id="overlay-title"></h2>
+          <p id="overlay-text" class="muted"></p>
+          <div id="overlay-buttons" class="overlay-buttons"></div>
+        </div>
+        <p id="game-status" class="sr-only" role="status" aria-live="polite"></p>
+      </section>
     </main>
 
     <!-- インストール方法（最初の画面から開く） -->

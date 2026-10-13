@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { goalFrame, step, newGame, FPS, JUMP_V, OBSTACLE_SIZES, distanceAt } from '../src/game';
+import { goalFrame, step, newGame, FPS, JUMP_V, OBSTACLE_SIZES, distanceAt } from '../src/logic';
 import { STAGES, parseLayout } from '../src/stages';
-import { canClear, jumpTrajectory, maxMargin } from './solver';
+import { canClear, findPlan, jumpTrajectory, maxMargin } from './solver';
 
 describe('ステージの配置の読み取り', () => {
   it('数字は時間(ミリ秒)として距離に変え、障害物は幅の分だけ進む', () => {
@@ -78,6 +78,18 @@ describe('クリアできるか(ジャンプの押し方を総当たりして確
 
   it.each(STAGES.map((s) => [s.id, s] as const))('ステージ %i: 当たり判定どおりでクリアできる', (_id, stage) => {
     expect(canClear(stage, 0)).toBe(true);
+  });
+
+  it.each(STAGES.map((s) => [s.id, s] as const))('ステージ %i: 見つけた押し方で、ゲーム本体(step)を実際にクリアできる', (_id, stage) => {
+    const plan = findPlan(stage, 0);
+    expect(plan).not.toBeNull();
+    let s = newGame(stage);
+    const moves = [...(plan ?? [])];
+    while (s.status === 'running') {
+      const m = moves.find((x) => s.frame >= x.frame && s.frame < x.frame + x.hold);
+      s = step(s, { pressed: moves.some((x) => x.frame === s.frame), held: m !== undefined });
+    }
+    expect(s.status).toBe('cleared');
   });
 
   it('ソルバーは、跳べない配置を「無理」と判定する', () => {

@@ -221,3 +221,158 @@ button.link {
   display: block;
   color: var(--muted);
 }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ステージ選択 */
+.stage-list {
+  list-style: none;
+  margin: 16px 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.stage-button {
+  width: 100%;
+  min-height: 72px;
+  margin: 0;
+  padding: 6px 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  line-height: 1.2;
+}
+
+.stage-num {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.stage-name {
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+
+/* ゲーム画面。高さは main の上下の余白と同じ式で引く(忘れると、ぴったり収まる画面がはみ出してスクロールする) */
+.game {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: calc(100dvh - max(16px, var(--safe-top)) - max(24px, env(safe-area-inset-bottom)));
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.hud {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hud button {
+  margin: 0;
+}
+
+.hud-title {
+  font-weight: 700;
+}
+
+.progress {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.progress-bar {
+  width: 0;
+  height: 100%;
+  background: var(--primary);
+}
+
+.stage-wrap {
+  position: relative;
+}
+
+.game-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 400 / 260;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.game-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 30%;
+  margin: 0;
+  text-align: center;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.overlay {
+  flex: 1;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px;
+  text-align: center;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: 16px;
+}
+
+.overlay h2 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.overlay p {
+  margin: 0;
+}
+
+.overlay-buttons {
+  display: flex;
+  flex-direction: column;
+  width: min(260px, 100%);
+  margin-top: 8px;
+}
+
+.overlay-buttons button {
+  margin: 4px 0;
+}
+
+.pad {
+  flex: 1;
+  min-height: 120px;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  border: 2px dashed var(--border);
+  border-radius: 16px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.pad small {
+  font-weight: 400;
+}
