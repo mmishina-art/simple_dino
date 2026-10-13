@@ -20,29 +20,42 @@
   </head>
   <body>
     <main id="app">
-      <!-- 最初の画面: ステージ選択 -->
-      <section id="screen-home">
+      <!-- タイトル画面(最初の画面) -->
+      <section id="screen-title" class="title-screen">
+        <div class="title-art">
+          <canvas id="title-canvas" class="game-canvas" role="img" aria-label="恐竜が、サボテンや岩をジャンプで跳び越えながら走っています"></canvas>
+          <div class="title-toggles">
+            <button id="sound-button" type="button" class="icon-button" aria-label="効果音" aria-pressed="true">🔊</button>
+            <button id="music-button" type="button" class="icon-button" aria-label="BGM" aria-pressed="true">🎵</button>
+          </div>
+        </div>
+        <h1 class="title-logo">ダイノラン</h1>
+        <p class="muted title-lead">タップでジャンプ。サボテンや岩をよけて、旗(ゴール)までたどりつこう。</p>
+        <button id="play-button" type="button" class="primary play-button">あそぶ</button>
+        <p id="title-summary" class="muted" aria-live="polite"></p>
+
+        <details class="backup">
+          <summary>記録のバックアップ</summary>
+          <p class="muted">記録は、このブラウザの中にだけ保存されています。ファイルに残しておくと、消えたときに戻せます。</p>
+          <button id="backup-export" type="button">ファイルに書き出す</button>
+          <label class="file-button">ファイルから読み込む<input id="backup-import" type="file" accept="application/json,.json" hidden></label>
+          <p id="backup-message" class="muted" role="status"></p>
+        </details>
+
+        <button id="install-open" type="button" class="link">📲 アプリとしてインストールする方法</button>
+
+        <p class="muted version">v<span id="version"></span></p>
+      </section>
+
+      <!-- ステージ選択 -->
+      <section id="screen-select" hidden>
         <header class="header">
-          <h1>ダイノラン</h1>
-          <button id="sound-button" type="button" class="icon-button" aria-label="音" aria-pressed="true">🔊</button>
+          <button id="select-back" type="button" aria-label="タイトルにもどる">もどる</button>
+          <h2 class="select-title">ステージをえらぶ</h2>
         </header>
-        <p class="muted">タップでジャンプ。サボテンや岩をよけて、旗(ゴール)までたどりつこう。</p>
         <p id="progress-summary" class="progress-summary" aria-live="polite"></p>
         <ol id="stage-list" class="stage-list" aria-label="ステージ"></ol>
-
-      <button id="ending-open" type="button" hidden>🎉 エンディングをもういちど見る</button>
-
-      <details class="backup">
-        <summary>記録のバックアップ</summary>
-        <p class="muted">記録は、このブラウザの中にだけ保存されています。ファイルに残しておくと、消えたときに戻せます。</p>
-        <button id="backup-export" type="button">ファイルに書き出す</button>
-        <label class="file-button">ファイルから読み込む<input id="backup-import" type="file" accept="application/json,.json" hidden></label>
-        <p id="backup-message" class="muted" role="status"></p>
-      </details>
-
-      <button id="install-open" type="button" class="link">📲 アプリとしてインストールする方法</button>
-
-      <p class="muted version">v<span id="version"></span></p>
+        <button id="ending-open" type="button" hidden>🎉 エンディングをもういちど見る</button>
       </section>
 
       <!-- エンディング(全ステージクリア) -->
@@ -59,6 +72,7 @@
         <div class="hud">
           <button id="game-back" type="button" aria-label="ステージ選択にもどる">もどる</button>
           <span id="game-title" class="hud-title"></span>
+          <button id="music-button-game" type="button" class="icon-button hud-music" aria-label="BGM" aria-pressed="true">🎵</button>
         </div>
         <div class="progress" aria-hidden="true"><div id="progress-bar" class="progress-bar"></div></div>
         <div class="stage-wrap">

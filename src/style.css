@@ -411,3 +411,84 @@ button.link {
 .ending button {
   min-width: 200px;
 }
+
+/* タイトル画面 */
+.title-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  position: relative;
+}
+
+.title-art {
+  position: relative;
+  align-self: stretch;
+}
+
+/* 音のボタンは、絵の右上に重ねる(場所をとらない) */
+.title-toggles {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+}
+
+.title-toggles .icon-button {
+  margin: 2px;
+  background: var(--surface);
+  border-radius: 12px;
+  opacity: 0.92;
+}
+
+.title-logo {
+  margin: 8px 0 0;
+  font-size: 2.2rem;
+  letter-spacing: 0.08em;
+}
+
+.title-lead {
+  margin: 0;
+}
+
+.play-button {
+  min-width: 220px;
+  min-height: 56px;
+  margin-top: 8px;
+  font-size: 1.3rem;
+}
+
+.title-screen .backup,
+.title-screen .link {
+  align-self: stretch;
+}
+
+.title-screen .version {
+  margin: 0;
+}
+
+.select-title {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+#screen-select .header {
+  gap: 12px;
+  justify-content: flex-start;
+}
+
+.hud-music {
+  margin-left: auto;
+}
+
+/* 背の低い画面(iPhone SE など)では、説明文を省いて、タイトル画面が 1 画面に収まるようにする */
+@media (max-height: 740px) {
+  .title-lead {
+    display: none;
+  }
+
+  .title-logo {
+    font-size: 1.9rem;
+  }
+}

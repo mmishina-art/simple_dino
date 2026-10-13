@@ -1,5 +1,5 @@
 import './style.css';
-import { startEnding } from './ending';
+import { startEnding, startTitle } from './ending';
 import { Player } from './play';
 import {
   allCleared, isCleared, isUnlocked, markEndingSeen, recordAttempt, recordClear, sanitizeProgress, totalAttempts, type Progress,
@@ -7,7 +7,9 @@ import {
 import { STAGES } from './stages';
 import { setupInstallGuide } from './install';
 import { setupUpdateBanner } from './pwa';
+import { isMusicOn, setMusicOn, setScene, syncMusic, unlockMusic } from './music';
 import { isSoundOn, setSound, sfx, syncSound } from './sound';
+import { stageSongId } from './songs';
 import { exportBackup, importBackup, load, migrateStorage, requestPersist, save } from './storage';
 import type { StageDef } from './logic';
 
@@ -19,7 +21,8 @@ const $ = <T extends HTMLElement>(id: string): T => {
 
 migrateStorage();
 
-const home = $('screen-home');
+const title = $('screen-title');
+const select = $('screen-select');
 const ending = $('screen-ending');
 const game = $('screen-game');
 const canvas = $<HTMLCanvasElement>('game-canvas');
@@ -27,10 +30,16 @@ const hint = $('game-hint');
 const overlay = $('game-overlay');
 const pad = $('game-pad');
 
-function renderSoundButton(): void {
+function renderToggles(): void {
   const sound = $('sound-button');
   sound.textContent = isSoundOn() ? '🔊' : '🔇';
   sound.setAttribute('aria-pressed', String(isSoundOn()));
+  // BGM のボタン(タイトルとゲーム中の 2 か所)
+  for (const id of ['music-button', 'music-button-game']) {
+    const el = $(id);
+    el.textContent = isMusicOn() ? '🎵' : '🔕';
+    el.setAttribute('aria-pressed', String(isMusicOn()));
+  }
 }
 
 // ---- 進み具合の保存 ----
@@ -77,6 +86,19 @@ function renderStageList(): void {
   const done = allCleared(progress, STAGES.length);
   $('progress-summary').textContent = done ? `★ ぜんぶクリア! (${STAGES.length}/${STAGES.length})` : `クリア ${progress.cleared.length}/${STAGES.length}`;
   $('ending-open').hidden = !done;
+  $('title-summary').textContent = progress.cleared.length > 0 ? `つづき: ${done ? '★ ぜんぶクリア!' : `クリア ${progress.cleared.length}/${STAGES.length}`}` : '';
+}
+
+// ---- 画面の切り替え ----
+
+let stopTitle: (() => void) | undefined;
+
+/** 表示する画面を 1 つ選ぶ */
+function show(screen: HTMLElement): void {
+  for (const el of [title, select, ending, game]) el.hidden = el !== screen;
+  stopTitle?.();
+  stopTitle = screen === title ? startTitle($<HTMLCanvasElement>('title-canvas')) : undefined;
+  if (screen === title || screen === select) setScene('title');
 }
 
 // ---- ゲーム画面 ----
@@ -90,6 +112,7 @@ const player = new Player(
     onJump: () => sfx('jump'),
     onLand: () => undefined,
     onDead: () => {
+      setScene(null);
       sfx('dead');
       status.textContent = 'ゲームオーバー';
       showOverlay('ざんねん!', 'もういちど挑戦しよう', [
@@ -98,6 +121,7 @@ const player = new Player(
       ]);
     },
     onCleared: () => {
+      setScene(null);
       sfx('clear');
       status.textContent = 'ステージクリア';
       const first = !isCleared(progress, current.id);
@@ -157,13 +181,13 @@ function hideOverlay(): void {
 function openStage(stage: StageDef): void {
   if (!isUnlocked(progress, stage.id)) return;
   current = stage;
-  home.hidden = true;
-  game.hidden = false;
+  show(game);
   $('game-title').textContent = `ステージ${stage.id} ${stage.name}`;
   hideOverlay();
   hint.hidden = false;
   status.textContent = '';
   player.load(stage);
+  setScene(stageSongId(stage.id), { restart: true });
 }
 
 /** 同じステージを、すぐにやり直す */
@@ -173,6 +197,7 @@ function restart(): void {
   status.textContent = '';
   player.load(current);
   updateProgress(recordAttempt(progress, current.id));
+  setScene(stageSongId(current.id), { restart: true });
   sfx('start');
   player.begin();
 }
@@ -180,8 +205,7 @@ function restart(): void {
 function closeStage(): void {
   player.stop();
   hideOverlay();
-  game.hidden = true;
-  home.hidden = false;
+  show(select);
   renderStageList();
 }
 
@@ -190,9 +214,8 @@ let stopEnding: (() => void) | undefined;
 function openEnding(): void {
   player.stop();
   hideOverlay();
-  home.hidden = true;
-  game.hidden = true;
-  ending.hidden = false;
+  show(ending);
+  setScene('ending', { restart: true, delay: 1.4 });
   $('ending-stats').textContent = `ぜんぶで ${totalAttempts(progress)} 回、挑戦しました`;
   stopEnding?.();
   stopEnding = startEnding($<HTMLCanvasElement>('ending-canvas'));
@@ -203,8 +226,7 @@ function openEnding(): void {
 function closeEnding(): void {
   stopEnding?.();
   stopEnding = undefined;
-  ending.hidden = true;
-  home.hidden = false;
+  show(select);
   renderStageList();
 }
 
@@ -220,6 +242,7 @@ function pressInput(): void {
   if (player.phase === 'ready') {
     hint.hidden = true;
     updateProgress(recordAttempt(progress, current.id));
+    setScene(stageSongId(current.id), { restart: true });
     sfx('start');
     player.begin();
   } else if (player.phase === 'playing') {
@@ -258,8 +281,22 @@ $('game-back').addEventListener('click', closeStage);
 
 $('sound-button').addEventListener('click', () => {
   setSound(!isSoundOn());
-  renderSoundButton();
+  renderToggles();
 });
+for (const id of ['music-button', 'music-button-game']) {
+  $(id).addEventListener('click', () => {
+    setMusicOn(!isMusicOn());
+    renderToggles();
+  });
+}
+$('play-button').addEventListener('click', () => {
+  show(select);
+  renderStageList();
+});
+$('select-back').addEventListener('click', () => show(title));
+
+// ブラウザは、利用者が操作するまで音を出せない。最初の操作で BGM(タイトル曲)を始める
+for (const type of ['click', 'touchend', 'pointerup', 'keydown'] as const) document.addEventListener(type, unlockMusic, { capture: true });
 
 $('backup-export').addEventListener('click', () => {
   const blob = new Blob([exportBackup()], { type: 'application/json' });
@@ -277,8 +314,9 @@ $<HTMLInputElement>('backup-import').addEventListener('change', async (e) => {
   try {
     const n = importBackup(await file.text());
     syncSound();
+    syncMusic();
     progress = loadProgress();
-    renderSoundButton();
+    renderToggles();
     renderStageList();
     message.textContent = `${n} 件の記録を読み込みました`;
   } catch (err) {
@@ -291,8 +329,9 @@ $('version').textContent = __APP_VERSION__;
 requestPersist();
 setupUpdateBanner($('update-banner'), $('update-button'));
 setupInstallGuide($<HTMLButtonElement>('install-open'), $<HTMLDialogElement>('install-dialog'), $<HTMLButtonElement>('install-now'));
-renderSoundButton();
+renderToggles();
 renderStageList();
+show(title);
 
 // ここまで来たら起動成功（public/boot.js が見ている）
 window.__appStarted = true;

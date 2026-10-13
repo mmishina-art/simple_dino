@@ -6,8 +6,26 @@ import { findPlan } from '../tests/solver';
 // アプリの ID（package.json の name）。保存データのキーの接頭辞になる
 const APP_ID = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { name: string }).name;
 
+/** タイトルから「あそぶ」でステージ選択に進む */
+async function toSelect(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'あそぶ' }).click();
+  await expect(page.locator('#stage-list')).toBeVisible();
+}
+
+test('最初はタイトル画面が出て、「あそぶ」でステージ選択に進み、「もどる」でタイトルにもどれる', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'ダイノラン', level: 1 })).toBeVisible();
+  await expect(page.locator('#stage-list')).toBeHidden();
+  await expect(page.locator('#title-canvas')).toBeVisible();
+  await toSelect(page);
+  await expect(page.locator('#screen-title')).toBeHidden();
+  await page.getByRole('button', { name: 'タイトルにもどる' }).click();
+  await expect(page.locator('#screen-title')).toBeVisible();
+});
+
 test('最初の画面に、全 10 ステージの選択ボタンが並ぶ', async ({ page }) => {
   await page.goto('/');
+  await toSelect(page);
   await expect(page.locator('.stage-button')).toHaveCount(10);
   await expect(page.getByRole('button', { name: 'ステージ1 そうげん' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'ステージ10 ラスト' })).toBeVisible();
@@ -15,6 +33,7 @@ test('最初の画面に、全 10 ステージの選択ボタンが並ぶ', asyn
 
 test('ステージを選んで、タップでスタートし、ぶつかるとゲームオーバー → もういちどで再挑戦できる', async ({ page }) => {
   await page.goto('/');
+  await toSelect(page);
   await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
   await expect(page.locator('#game-hint')).toBeVisible();
   await expect(page.locator('#game-title')).toHaveText('ステージ1 そうげん');
@@ -33,6 +52,7 @@ test('ステージを選んで、タップでスタートし、ぶつかると�
 
 test('ジャンプすると効果音が鳴る', async ({ page }) => {
   await page.goto('/');
+  await toSelect(page);
   await page.evaluate(() => {
     (window as unknown as { __sounds: number[] }).__sounds = [];
     document.addEventListener('app:sound', (e) => (window as unknown as { __sounds: number[] }).__sounds.push((e as CustomEvent).detail.frequency));
@@ -67,6 +87,7 @@ async function playWithPlan(page: Page, stageIndex: number, margin: number): Pro
 
 test('最初はステージ 1 だけ遊べて、ほかはロックされている', async ({ page }) => {
   await page.goto('/');
+  await toSelect(page);
   await expect(page.locator('#progress-summary')).toHaveText('クリア 0/10');
   await expect(page.getByRole('button', { name: 'ステージ1 そうげん' })).toBeEnabled();
   const locked = page.getByRole('button', { name: /ステージ2 さばく.*ロック中/ });
@@ -77,6 +98,7 @@ test('最初はステージ 1 だけ遊べて、ほかはロックされてい�
 test('ステージ 1 をクリアすると、クリア画面が出て、つぎのステージが解放され、記録が残る', async ({ page }) => {
   await page.clock.install({ time: 0 });
   await page.goto('/');
+  await toSelect(page);
   await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
   await playWithPlan(page, 0, 15);
   await expect(page.locator('#overlay-title')).toHaveText('ステージクリア!');
@@ -91,6 +113,7 @@ test('ステージ 1 をクリアすると、クリア画面が出て、つぎ�
   await expect(page.locator('#progress-summary')).toHaveText('クリア 1/10');
   await page.clock.resume();
   await page.reload();
+  await toSelect(page);
   await expect(page.locator('#progress-summary')).toHaveText('クリア 1/10');
   await expect(page.getByRole('button', { name: /ステージ1 そうげん\(クリア済み\)/ })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'ステージ2 さばく' })).toBeEnabled();
@@ -106,6 +129,7 @@ test('最終ステージをクリアすると、エンディングが出る(も�
   }, APP_ID);
   await page.clock.install({ time: 0 });
   await page.goto('/');
+  await toSelect(page);
   await expect(page.locator('#progress-summary')).toHaveText('クリア 9/10');
   await page.getByRole('button', { name: 'ステージ10 ラスト' }).click();
   await playWithPlan(page, 9, 8);
@@ -117,6 +141,8 @@ test('最終ステージをクリアすると、エンディングが出る(も�
   await expect(page.locator('#progress-summary')).toHaveText('★ ぜんぶクリア! (10/10)');
   await page.clock.resume();
   await page.reload();
+  await expect(page.locator('#title-summary')).toHaveText('つづき: ★ ぜんぶクリア!');
+  await toSelect(page);
   await expect(page.locator('#progress-summary')).toHaveText('★ ぜんぶクリア! (10/10)');
   await page.getByRole('button', { name: /エンディングをもういちど見る/ }).click();
   await expect(page.locator('#screen-ending')).toBeVisible();
@@ -130,7 +156,7 @@ test('進み具合は、バックアップの書き出し・読み込みで戻�
     }
   }, APP_ID);
   await page.goto('/');
-  await expect(page.locator('#progress-summary')).toHaveText('クリア 2/10');
+  await expect(page.locator('#title-summary')).toHaveText('つづき: クリア 2/10');
   await page.getByText('記録のバックアップ').click();
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'ファイルに書き出す' }).click()]);
   const { readFileSync } = await import('node:fs');
@@ -138,22 +164,63 @@ test('進み具合は、バックアップの書き出し・読み込みで戻�
 
   await page.evaluate(() => localStorage.clear());
   await page.reload();
-  await expect(page.locator('#progress-summary')).toHaveText('クリア 0/10');
+  await expect(page.locator('#title-summary')).toHaveText('');
   await page.getByText('記録のバックアップ').click();
   await page.locator('#backup-import').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(text) });
-  await expect(page.locator('#progress-summary')).toHaveText('クリア 2/10');
+  await expect(page.locator('#title-summary')).toHaveText('つづき: クリア 2/10');
+  await toSelect(page);
   await expect(page.getByRole('button', { name: 'ステージ3 ゆうやけ' })).toBeEnabled();
 });
 
 test('壊れた進み具合の記録が入っていても、起動してステージ 1 から遊べる', async ({ page }) => {
   await page.addInitScript((id) => localStorage.setItem(`${id}-progress`, '{"cleared":[1,99,"x"],"attempts":5'), APP_ID);
   await page.goto('/');
+  await toSelect(page);
   await expect(page.locator('#progress-summary')).toHaveText('クリア 0/10');
   await expect(page.getByRole('button', { name: 'ステージ1 そうげん' })).toBeEnabled();
 });
 
+test('BGM: タイトルの曲が鳴り、ステージを開くとそのステージの曲に変わる。BGM をオフにすると鳴らない', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as unknown as { __songs: string[] }).__songs = [];
+    document.addEventListener('app:music', (e) => (window as unknown as { __songs: string[] }).__songs.push((e as CustomEvent).detail.song));
+  });
+  await page.goto('/');
+  const songs = () => page.evaluate(() => (window as unknown as { __songs: string[] }).__songs);
+  // 利用者が操作するまで、BGM は始まらない
+  expect(await songs()).toEqual([]);
+  await toSelect(page);
+  await expect.poll(songs).toEqual(['title']);
+  await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
+  await expect.poll(songs).toEqual(['title', 'stage1']);
+  // 走り出すと、曲が頭から始まる
+  await page.locator('#game-canvas').tap();
+  await expect.poll(songs).toEqual(['title', 'stage1', 'stage1']);
+  // ぶつかると、BGM は止まる(やられた音が鳴る)。もういちどで、また頭から
+  await expect(page.locator('#overlay-title')).toHaveText('ざんねん!', { timeout: 10_000 });
+  await page.getByRole('button', { name: 'もういちど' }).click();
+  await expect.poll(songs).toEqual(['title', 'stage1', 'stage1', 'stage1']);
+  // ゲーム画面の BGM ボタンでオフにする
+  await page.locator('#music-button-game').click();
+  await expect(page.locator('#music-button-game')).toHaveAttribute('aria-pressed', 'false');
+  await page.getByRole('button', { name: 'ステージ選択にもどる' }).click();
+  await page.waitForTimeout(300);
+  expect((await songs()).length).toBe(4);
+});
+
+test('BGM のオン/オフは、タイトルで切り替えられ、再読み込みしても残る', async ({ page }) => {
+  await page.goto('/');
+  const button = page.locator('#music-button');
+  await expect(button).toHaveAttribute('aria-pressed', 'true');
+  await button.click();
+  await expect(button).toHaveAttribute('aria-pressed', 'false');
+  await page.reload();
+  await expect(page.locator('#music-button')).toHaveAttribute('aria-pressed', 'false');
+});
+
 test('ステージ選択にもどれる', async ({ page }) => {
   await page.goto('/');
+  await toSelect(page);
   await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
   await expect(page.locator('#screen-game')).toBeVisible();
   await page.getByRole('button', { name: 'ステージ選択にもどる' }).click();
@@ -249,7 +316,7 @@ test('起動できないときは「なおす」ボタンが出て、押すと�
 
   await page.unroute('**/assets/*.js');
   await page.getByRole('button', { name: 'なおす' }).click();
-  await expect(page.locator('.stage-button')).toHaveCount(10);
+  await expect(page.getByRole('button', { name: 'あそぶ' })).toBeVisible();
   await expect(page.locator('#sound-button')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('#boot-error')).toBeHidden();
   // このアプリのキャッシュだけが作り直され、ほかのアプリのキャッシュは残っている
