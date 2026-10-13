@@ -3,7 +3,7 @@
 // ドット絵がにじまないよう、四角は端末の px にそろえて塗る。
 import { DINO_W, distanceAt, type GameState, type ObstacleKind } from './logic';
 import { DINO, SPRITES, squashed, type Sprite } from './sprites';
-import type { Theme } from './themes';
+import { THEMES, type Theme } from './themes';
 
 export const VIEW_W = 400;
 export const VIEW_H = 260;
@@ -205,4 +205,51 @@ export function drawScene(c: CanvasRenderingContext2D, width: number, state: Gam
   const drawn = opts.squash && state.grounded && state.status === 'running' ? squashed(dino) : dino;
   const x = DINO_SCREEN_X - (dino[0].length * CELL - DINO_W) / 2;
   sprite(p, drawn, x, GROUND_Y - state.y - drawn.length * CELL, theme.dino);
+}
+
+// ---- エンディング ----
+
+const CONFETTI = ['#ffd25a', '#ff8fb0', '#7fd18a', '#7ab8ff'];
+
+/** 全ステージクリアのエンディング。夜があけて、恐竜が旗の前でよろこぶ。t は経過秒 */
+export function drawEnding(c: CanvasRenderingContext2D, width: number, t: number): void {
+  const p: Pen = { c, s: width / VIEW_W };
+  const theme = THEMES[0];
+  const k = Math.min(1, t / 5);
+
+  // 空: 夜から朝へ
+  const bandH = GROUND_Y / SKY_BANDS;
+  for (let i = 0; i < SKY_BANDS; i++) {
+    const f = i / (SKY_BANDS - 1);
+    rect(p, 0, i * bandH, VIEW_W, bandH + 1, mix(mix('#101a3a', theme.skyTop, k), mix('#2a3a6a', '#fff1d0', k), f));
+  }
+  if (k < 0.8) {
+    for (let i = 0; i < 24; i++) rect(p, (i * 53) % VIEW_W, 8 + ((i * 41) % 120), 2, 2, '#ffffff');
+  }
+  // 朝日
+  const sunY = GROUND_Y - 24 - k * 120;
+  rect(p, 180, sunY, 40, 40, '#ffe27a');
+  rect(p, 174, sunY + 6, 52, 28, '#ffe27a');
+
+  // 地面と、流れていく景色
+  const d = t * 90;
+  drawGround(p, theme, d);
+  for (let i = 0; i < 4; i++) {
+    const x = scroll(i * 130 + 30, d, 0.6, 60);
+    sprite(p, i % 2 === 0 ? SPRITES.S : SPRITES.R, x, GROUND_Y - (i % 2 === 0 ? 26 : 20), theme.cactus, theme.rockLight);
+  }
+  drawGoal(p, theme, 300);
+
+  // 恐竜: 走りながら、ときどきはずむ
+  const hop = Math.max(0, Math.sin(t * 5)) * 18;
+  const run = Math.floor(t * 10) % 2 === 0 ? DINO.runA : DINO.runB;
+  sprite(p, hop > 0.5 ? DINO.stand : run, 160, GROUND_Y - hop - 24, theme.dino);
+
+  // 紙ふぶき
+  if (t > 3) {
+    for (let i = 0; i < 40; i++) {
+      const y = (((t - 3) * 40 + i * 29) % (GROUND_Y + 20)) - 10;
+      rect(p, (i * 37) % VIEW_W, y, 3, 3, CONFETTI[i % CONFETTI.length]);
+    }
+  }
 }

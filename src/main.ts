@@ -1,10 +1,14 @@
 import './style.css';
+import { startEnding } from './ending';
 import { Player } from './play';
+import {
+  allCleared, isCleared, isUnlocked, markEndingSeen, recordAttempt, recordClear, sanitizeProgress, totalAttempts, type Progress,
+} from './progress';
 import { STAGES } from './stages';
 import { setupInstallGuide } from './install';
 import { setupUpdateBanner } from './pwa';
 import { isSoundOn, setSound, sfx, syncSound } from './sound';
-import { exportBackup, importBackup, migrateStorage, requestPersist } from './storage';
+import { exportBackup, importBackup, load, migrateStorage, requestPersist, save } from './storage';
 import type { StageDef } from './logic';
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -16,6 +20,7 @@ const $ = <T extends HTMLElement>(id: string): T => {
 migrateStorage();
 
 const home = $('screen-home');
+const ending = $('screen-ending');
 const game = $('screen-game');
 const canvas = $<HTMLCanvasElement>('game-canvas');
 const hint = $('game-hint');
@@ -28,28 +33,50 @@ function renderSoundButton(): void {
   sound.setAttribute('aria-pressed', String(isSoundOn()));
 }
 
+// ---- 進み具合の保存 ----
+
+const loadProgress = (): Progress => sanitizeProgress(load<unknown>('progress', null), STAGES.length);
+let progress = loadProgress();
+
+function updateProgress(next: Progress): void {
+  progress = next;
+  save('progress', progress);
+}
+
 // ---- ステージ選択 ----
 
 function renderStageList(): void {
   const list = $('stage-list');
   list.replaceChildren();
   for (const stage of STAGES) {
+    const unlocked = isUnlocked(progress, stage.id);
+    const cleared = isCleared(progress, stage.id);
     const li = document.createElement('li');
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'stage-button';
-    button.setAttribute('aria-label', `ステージ${stage.id} ${stage.name}`);
+    button.disabled = !unlocked;
+    // 色だけでなく、記号と読み上げでも状態を伝える
+    const state = cleared ? 'クリア済み' : unlocked ? '' : `ロック中。ステージ${stage.id - 1}をクリアすると遊べます`;
+    button.setAttribute('aria-label', `ステージ${stage.id} ${stage.name}${state ? `(${state})` : ''}`);
     const num = document.createElement('span');
     num.className = 'stage-num';
     num.textContent = String(stage.id);
     const name = document.createElement('span');
     name.className = 'stage-name';
     name.textContent = stage.name;
-    button.append(num, name);
+    const mark = document.createElement('span');
+    mark.className = 'stage-state';
+    mark.setAttribute('aria-hidden', 'true');
+    mark.textContent = cleared ? '★' : unlocked ? '' : '🔒';
+    button.append(num, name, mark);
     button.addEventListener('click', () => openStage(stage));
     li.append(button);
     list.append(li);
   }
+  const done = allCleared(progress, STAGES.length);
+  $('progress-summary').textContent = done ? `★ ぜんぶクリア! (${STAGES.length}/${STAGES.length})` : `クリア ${progress.cleared.length}/${STAGES.length}`;
+  $('ending-open').hidden = !done;
 }
 
 // ---- ゲーム画面 ----
@@ -73,10 +100,23 @@ const player = new Player(
     onCleared: () => {
       sfx('clear');
       status.textContent = 'ステージクリア';
+      const first = !isCleared(progress, current.id);
+      updateProgress(recordClear(progress, current.id));
+      renderStageList();
       const next = STAGES.find((s) => s.id === current.id + 1);
-      showOverlay('ステージクリア!', `${current.name} をクリアした`, [
+      const last = current.id === STAGES.length;
+      if (last && allCleared(progress, STAGES.length) && !progress.endingSeen) {
+        updateProgress(markEndingSeen(progress));
+        openEnding();
+        return;
+      }
+      const tries = progress.firstClearTries[current.id];
+      let text = first ? `${tries}回目の挑戦でクリア!` : `${current.name} をクリアした`;
+      if (first && next) text += ` ステージ${next.id}が遊べるようになった`;
+      showOverlay('ステージクリア!', text, [
         ...(next ? [{ label: 'つぎのステージ', primary: true, run: () => openStage(next) }] : []),
-        { label: 'もういちど', primary: !next, run: () => restart() },
+        ...(last && allCleared(progress, STAGES.length) ? [{ label: 'エンディング', primary: true, run: () => openEnding() }] : []),
+        { label: 'もういちど', run: () => restart() },
         { label: 'ステージ選択', run: () => closeStage() },
       ]);
     },
@@ -115,6 +155,7 @@ function hideOverlay(): void {
 }
 
 function openStage(stage: StageDef): void {
+  if (!isUnlocked(progress, stage.id)) return;
   current = stage;
   home.hidden = true;
   game.hidden = false;
@@ -131,6 +172,7 @@ function restart(): void {
   hint.hidden = true;
   status.textContent = '';
   player.load(current);
+  updateProgress(recordAttempt(progress, current.id));
   sfx('start');
   player.begin();
 }
@@ -140,7 +182,34 @@ function closeStage(): void {
   hideOverlay();
   game.hidden = true;
   home.hidden = false;
+  renderStageList();
 }
+
+let stopEnding: (() => void) | undefined;
+
+function openEnding(): void {
+  player.stop();
+  hideOverlay();
+  home.hidden = true;
+  game.hidden = true;
+  ending.hidden = false;
+  $('ending-stats').textContent = `ぜんぶで ${totalAttempts(progress)} 回、挑戦しました`;
+  stopEnding?.();
+  stopEnding = startEnding($<HTMLCanvasElement>('ending-canvas'));
+  sfx('clear');
+  $('ending-close').focus();
+}
+
+function closeEnding(): void {
+  stopEnding?.();
+  stopEnding = undefined;
+  ending.hidden = true;
+  home.hidden = false;
+  renderStageList();
+}
+
+$('ending-open').addEventListener('click', openEnding);
+$('ending-close').addEventListener('click', closeEnding);
 
 // 操作: 画面のどこをタップしてもジャンプ(ボタンの上は除く)。押し続けると高く跳ぶ
 function isControl(target: EventTarget | null): boolean {
@@ -150,6 +219,7 @@ function isControl(target: EventTarget | null): boolean {
 function pressInput(): void {
   if (player.phase === 'ready') {
     hint.hidden = true;
+    updateProgress(recordAttempt(progress, current.id));
     sfx('start');
     player.begin();
   } else if (player.phase === 'playing') {
@@ -207,6 +277,7 @@ $<HTMLInputElement>('backup-import').addEventListener('change', async (e) => {
   try {
     const n = importBackup(await file.text());
     syncSound();
+    progress = loadProgress();
     renderSoundButton();
     renderStageList();
     message.textContent = `${n} 件の記録を読み込みました`;

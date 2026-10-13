@@ -376,3 +376,38 @@ button.link {
 .pad small {
   font-weight: 400;
 }
+
+.progress-summary {
+  margin: 8px 0 0;
+  font-weight: 700;
+}
+
+.stage-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.stage-state {
+  font-size: 0.7rem;
+  min-height: 1em;
+}
+
+.ending {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.ending h2 {
+  margin: 8px 0 0;
+}
+
+.ending p {
+  margin: 0;
+}
+
+.ending button {
+  min-width: 200px;
+}
