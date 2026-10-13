@@ -108,6 +108,17 @@ describe('演奏イベントの作成', () => {
     expect(events.some((e) => e.voice === 'bass')).toBe(true);
   });
 
+  it.each(SONGS.map((s) => [s.id, s] as const))('%s: 音域がマイルド(メロディーは 1.1kHz 以下、ベースは小さいスピーカーでも聞こえる 60Hz 以上)', (_id, song) => {
+    for (const e of buildEvents(song)) {
+      if (e.voice === 'lead') {
+        expect(e.freq).toBeLessThanOrEqual(1100);
+        expect(e.freq).toBeGreaterThanOrEqual(180);
+      }
+      if (e.voice === 'bass') expect(e.freq).toBeGreaterThanOrEqual(60);
+      if (e.voice === 'arp') expect(e.freq).toBeLessThanOrEqual(1100);
+    }
+  });
+
   it('伴奏・ドラム・やまびこは、曲の指定どおりに入る', () => {
     const has = (id: Parameters<typeof songById>[0], voice: string) => buildEvents(songById(id)).some((e) => e.voice === voice);
     expect(has('stage1', 'arp')).toBe(false);
