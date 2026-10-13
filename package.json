@@ -1,6 +1,5 @@
 {
-  "name": "pwa-app",
-  "pwaTemplate": true,
+  "name": "simple_dino",
   "version": "0.1.0",
   "private": true,
   "type": "module",

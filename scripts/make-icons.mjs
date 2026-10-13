@@ -4,8 +4,26 @@
 import { deflateSync } from 'node:zlib';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
-const BG = [0x1f, 0x6f, 0xeb];
-const FG = [0xff, 0xff, 0xff];
+const BG = [0xf7, 0xf1, 0xde];
+const FG = [0x3b, 0x3a, 0x30];
+
+// 図柄: ドット絵の恐竜（# が体、. が空き）。目は穴になっている。
+const SPRITE = [
+  '........#####.',
+  '.......#######',
+  '.......##.####',
+  '.......#######',
+  '.......###....',
+  '.......######.',
+  '#.....####....',
+  '##...#####.#..',
+  '.#########....',
+  '..########....',
+  '...#####......',
+  '...##..##.....',
+];
+const SW = SPRITE[0].length;
+const SH = SPRITE.length;
 
 function crc32(buf) {
   let c;
@@ -32,7 +50,6 @@ function chunk(type, data) {
 function png(size, figure, fullBleed) {
   const raw = Buffer.alloc(size * (size * 4 + 1));
   const c = size / 2;
-  const half = (size * figure) / 2;
   const radius = size * 0.22;
   for (let y = 0; y < size; y++) {
     const row = y * (size * 4 + 1);
@@ -42,8 +59,11 @@ function png(size, figure, fullBleed) {
       const dx = Math.max(Math.abs(x - c) - (c - radius), 0);
       const dy = Math.max(Math.abs(y - c) - (c - radius), 0);
       const inBg = fullBleed || dx * dx + dy * dy <= radius * radius;
-      // 図柄: 中央の丸
-      const inFg = (x - c) ** 2 + (y - c) ** 2 <= (half * 0.8) ** 2;
+      // 図柄: 中央のドット絵（横幅が figure の割合になる）
+      const cell = (size * figure) / SW;
+      const sx = Math.floor((x - (c - (SW * cell) / 2)) / cell);
+      const sy = Math.floor((y - (c - (SH * cell) / 2)) / cell);
+      const inFg = sx >= 0 && sx < SW && sy >= 0 && sy < SH && SPRITE[sy][sx] === '#';
       const px = inFg ? FG : BG;
       const o = row + 1 + x * 4;
       raw[o] = px[0];
@@ -65,6 +85,20 @@ function png(size, figure, fullBleed) {
   ]);
 }
 
+// SVG 用: 同じドット絵を、小さな四角の集まりとして書く（横幅は 512 の 70%）
+function svgPath() {
+  const cell = (512 * 0.7) / SW;
+  const x0 = 256 - (SW * cell) / 2;
+  const y0 = 256 - (SH * cell) / 2;
+  let d = '';
+  SPRITE.forEach((row, y) => {
+    [...row].forEach((ch, x) => {
+      if (ch === '#') d += `M${(x0 + x * cell).toFixed(1)} ${(y0 + y * cell).toFixed(1)}h${cell.toFixed(1)}v${cell.toFixed(1)}h-${cell.toFixed(1)}z`;
+    });
+  });
+  return d;
+}
+
 const out = new URL('../public/icons/', import.meta.url);
 mkdirSync(out, { recursive: true });
 const files = {
@@ -78,6 +112,6 @@ for (const [name, data] of Object.entries(files)) writeFileSync(new URL(name, ou
 
 writeFileSync(
   new URL('icon.svg', out),
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#1f6feb"/><circle cx="256" cy="256" r="143" fill="#fff"/></svg>\n`,
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#f7f1de"/><path fill="#3b3a30" d="${svgPath()}"/></svg>\n`,
 );
 console.log('icons generated:', [...Object.keys(files), 'icon.svg'].join(', '));
