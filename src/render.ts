@@ -253,3 +253,31 @@ export function drawEnding(c: CanvasRenderingContext2D, width: number, t: number
     }
   }
 }
+
+// ---- タイトル ----
+
+/** タイトル画面の絵: 恐竜が、流れてくるサボテンや岩を、次々に跳び越える。t は経過秒 */
+export function drawTitle(c: CanvasRenderingContext2D, width: number, t: number): void {
+  const p: Pen = { c, s: width / VIEW_W };
+  const theme = THEMES[0];
+  const d = t * 110;
+
+  const bandH = GROUND_Y / SKY_BANDS;
+  for (let i = 0; i < SKY_BANDS; i++) rect(p, 0, i * bandH, VIEW_W, bandH + 1, mix(theme.skyTop, theme.skyBottom, i / (SKY_BANDS - 1)));
+  drawDecor(p, theme, d);
+  drawGround(p, theme, d);
+
+  // 障害物が右から流れてきて、恐竜が手前で跳ぶ(跳ぶ高さは、障害物との距離で決まる)
+  const GAP = 230;
+  let hop = 0;
+  for (let k = 0; k < 3; k++) {
+    const kind: ObstacleKind = (k + Math.floor(d / GAP)) % 3 === 1 ? 'R' : 'S';
+    const size = kind === 'R' ? { w: 26, h: 20 } : { w: 14, h: 26 };
+    const x = DINO_SCREEN_X + 150 + k * GAP - (d % GAP);
+    sprite(p, SPRITES[kind], x, GROUND_Y - size.h, ...obstacleColors(kind, theme));
+    const near = (x - DINO_SCREEN_X - 24) / 46;
+    if (Math.abs(near) < 1) hop = Math.max(hop, 46 * (1 - near * near));
+  }
+  const run = Math.floor(t * 9) % 2 === 0 ? DINO.runA : DINO.runB;
+  sprite(p, hop > 1 ? DINO.stand : run, DINO_SCREEN_X - 4, GROUND_Y - hop - 24, theme.dino);
+}

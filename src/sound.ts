@@ -4,6 +4,12 @@ import { load, save } from './storage';
 let ctx: AudioContext | undefined;
 let enabled = load('sound', true);
 
+/** 効果音と BGM が共有する AudioContext(なければ作る) */
+export function audioContext(): AudioContext {
+  ctx ??= new AudioContext();
+  return ctx;
+}
+
 export const isSoundOn = (): boolean => enabled;
 
 /** バックアップを読み込んだあとなど、保存されている設定を読み直す */
@@ -19,7 +25,7 @@ export function setSound(on: boolean): void {
 export function beep(frequency = 660, seconds = 0.08): void {
   if (!enabled) return;
   try {
-    ctx ??= new AudioContext();
+    const ctx = audioContext();
     // iPhone では操作のあとに resume が必要
     void ctx.resume();
     const osc = ctx.createOscillator();

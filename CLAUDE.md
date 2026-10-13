@@ -41,6 +41,7 @@ Vite + TypeScript + vite-plugin-pwa + Vitest + Playwright + ESLint。UI フレ�
 ## 構成
 
 - `src/logic.ts`: ルール・計算(ゲームの物理、当たり判定)。DOM に触れない純関数にして `tests/` で単体テストする。`src/stages.ts`: ステージのデータ。`tests/solver.ts`: ステージが解けることを総当たりで確かめる(テスト用)。
+- `src/songs.ts`(BGM の曲のデータ。テストで小節の長さ・音の高さを検査)、`src/music.ts`(BGM の演奏)。BGM は効果音とは別にオン/オフできる。
 - `src/render.ts`(Canvas 描画)、`src/sprites.ts`(ドット絵)、`src/themes.ts`(ステージの背景)、`src/play.ts`(プレイ中の進行と入力)。
 - `src/main.ts`: DOM の操作だけ。`src/sound.ts`(効果音)、`src/storage.ts`(保存)、`src/pwa.ts`(更新ボタン)、`src/install.ts`(インストール方法の説明)。
 - `vite.config.ts`: アプリ名・色・manifest。`index.html` の `theme-color`・タイトルと合わせて書き換える。
@@ -82,7 +83,7 @@ Vite + TypeScript + vite-plugin-pwa + Vitest + Playwright + ESLint。UI フレ�
 - ズーム: ピンチ拡大は許可し、ダブルタップ拡大だけ `touch-action: manipulation` で防ぐ。viewport に `user-scalable=no` / `maximum-scale` を入れない(`check:dist` が検出する)。
 - `prefers-reduced-motion: reduce` でアニメーションを無効化する。
 - アクセシビリティ: 結果は `aria-live` 領域でも読み上げる。ボタンに `aria-label` / `aria-pressed`。色だけで状態を伝えない。
-- 効果音は Web Audio で合成(音声ファイルを持たない)。オン/オフ設定を必ず用意する。
+- 効果音と BGM は Web Audio で合成(音声ファイルを持たない)。オン/オフ設定を必ず用意する。
 - **iPhone の画面の上端(ぼかしの帯)を避ける。** ホーム画面アプリで、ステータスバーの下に内容が入り込むと、iOS がそこをぼかして、上端の文字が読みにくくなる(`simple_chess`・`simple_blackjack`・`simple_shogi` で起きた)。
   - `index.html` の `apple-mobile-web-app-status-bar-style` は、**不透明**にする(暗い固定・端末設定に従う: `black` / 明るい固定: `default`)。**`black-translucent` にしない。**
   - 上端の余白は、`src/style.css` の `--safe-top`(`env(safe-area-inset-top)` + `--top-gap` の 24px)を使う。**`env(safe-area-inset-top)` だけにしない。**
