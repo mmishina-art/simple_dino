@@ -119,6 +119,12 @@ describe('演奏イベントの作成', () => {
     }
   });
 
+  it('夕焼け(やわらかい三角波)は、ほかの曲より高めの音域で鳴る', () => {
+    const lowest = (id: Parameters<typeof songById>[0]) => Math.min(...buildEvents(songById(id)).filter((e) => e.voice === 'lead').map((e) => e.freq));
+    expect(lowest('stage3')).toBeGreaterThan(lowest('stage1'));
+    expect(songById('stage3').lead).toBe('triangle');
+  });
+
   it('伴奏・ドラム・やまびこは、曲の指定どおりに入る', () => {
     const has = (id: Parameters<typeof songById>[0], voice: string) => buildEvents(songById(id)).some((e) => e.voice === voice);
     expect(has('stage1', 'arp')).toBe(false);

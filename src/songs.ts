@@ -30,6 +30,8 @@ export interface Song {
   staccato?: boolean;
   /** やまびこ(同じ音を、少し遅れて小さく重ねる) */
   echo?: boolean;
+  /** メロディーを下げる幅(半音)。省くと LEAD_SHIFT。やわらかい音色の曲は、小さくして高めにできる */
+  leadShift?: number;
 }
 
 const MAJOR = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
@@ -93,7 +95,7 @@ export const SONGS: readonly Song[] = [
       'D6:4 C6:2 Bb5:2 A5:4 G5:4',
       'G5:4 E5:4 C5:8',
     ],
-    scale: ['F', 'G', 'A', 'Bb', 'C', 'D', 'E'], lead: 'triangle', bass: 'quarters', arp: 'eighths', drums: 'soft',
+    scale: ['F', 'G', 'A', 'Bb', 'C', 'D', 'E'], lead: 'triangle', bass: 'quarters', arp: 'eighths', drums: 'soft', leadShift: 5,
   },
   {
     id: 'stage4', name: 'もり', bpm: 116,
@@ -353,7 +355,7 @@ export function buildEvents(song: Song): NoteEvent[] {
     for (const n of parseBar(bar)) {
       if (n.midi === null) continue;
       const len = song.staccato ? Math.max(1, Math.ceil(n.len / 2)) : n.len;
-      const freq = freqOfMidi(n.midi - LEAD_SHIFT);
+      const freq = freqOfMidi(n.midi - (song.leadShift ?? LEAD_SHIFT));
       events.push({ step: origin + n.at, len, voice: 'lead', freq, gain: 0.14 });
       if (song.echo) events.push({ step: origin + n.at + 3, len: Math.min(len, 3), voice: 'lead', freq, gain: 0.045 });
     }
