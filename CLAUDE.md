@@ -6,11 +6,11 @@ PWA アプリ(ツール/ゲーム)の共通テンプレート。**新しいア�
 
 ## このアプリの方針(新規作成時に記入)
 
-- アプリの ID(`package.json` の `name`。**ほかのアプリと別の名前**にする。下の「同じサイトに載るアプリ」を参照):
-- アプリの概要:
-- 配色: (端末設定に従う / 明るい固定 / 暗い固定 のどれか。決めたら src/style.css と theme-color をそろえる)
-- 公開 URL:
-- 追加した拡張: (なし / UI フレームワーク / バックエンド など。理由も書く)
+- アプリの ID(`package.json` の `name`。**ほかのアプリと別の名前**にする。下の「同じサイトに載るアプリ」を参照): `simple_dino`
+- アプリの概要: ダイノラン。自動で走る恐竜をタップでジャンプさせ、障害物を避けてゴールを目指す、全10ステージのクリア型ゲーム(Chrome のオフライン恐竜ゲーム風)。解放済みステージ・クリア記録を端末に保存する。
+- 配色: 明るい固定(`src/style.css` と `theme-color` は #f7f1de のクリーム色。ステージの背景はゲーム画面の中だけで変える)
+- 公開 URL: https://mmishina-art.github.io/simple_dino/
+- 追加した拡張: なし(描画は Canvas 2D、効果音は Web Audio、絵はコードで描くドット絵)
 
 ## 基本方針
 
@@ -40,7 +40,8 @@ Vite + TypeScript + vite-plugin-pwa + Vitest + Playwright + ESLint。UI フレ�
 
 ## 構成
 
-- `src/logic.ts`: ルール・計算。DOM に触れない純関数にして `tests/` で単体テストする。
+- `src/logic.ts`: ルール・計算(ゲームの物理、当たり判定)。DOM に触れない純関数にして `tests/` で単体テストする。`src/stages.ts`: ステージのデータ。`tests/solver.ts`: ステージが解けることを総当たりで確かめる(テスト用)。
+- `src/render.ts`(Canvas 描画)、`src/sprites.ts`(ドット絵)、`src/themes.ts`(ステージの背景)、`src/play.ts`(プレイ中の進行と入力)。
 - `src/main.ts`: DOM の操作だけ。`src/sound.ts`(効果音)、`src/storage.ts`(保存)、`src/pwa.ts`(更新ボタン)、`src/install.ts`(インストール方法の説明)。
 - `vite.config.ts`: アプリ名・色・manifest。`index.html` の `theme-color`・タイトルと合わせて書き換える。
 - `scripts/check-dist.mjs`: ビルド成果物が PWA として成立しているかの検査。

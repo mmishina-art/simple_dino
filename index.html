@@ -4,33 +4,33 @@
     <meta charset="UTF-8" />
     <!-- ピンチ拡大は許可する（user-scalable=no / maximum-scale は入れない） -->
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#1f6feb" />
+    <meta name="color-scheme" content="light only" />
+    <meta name="theme-color" content="#f7f1de" />
     <meta name="app-id" content="__APP_ID__" />
-    <meta name="description" content="PWAアプリのテンプレート" />
+    <meta name="description" content="走る恐竜をジャンプで操作して、ゴールを目指すステージクリア型ゲーム" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <!-- iPhone のホーム画面アプリ: ステータスバーは不透明にする（暗い固定・端末設定に従う: black / 明るい固定: default）。
          black-translucent にすると、ステータスバーの下に入った内容を iOS がぼかして、画面の上端の文字が読みにくくなる -->
-    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
-    <meta name="apple-mobile-web-app-title" content="PWAアプリ" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="ダイノラン" />
     <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-    <title>PWAアプリ</title>
+    <title>ダイノラン</title>
   </head>
   <body>
     <main id="app">
-      <header class="header">
-        <h1>PWAアプリ</h1>
-        <button id="sound-button" type="button" class="icon-button" aria-label="音" aria-pressed="true">🔊</button>
-      </header>
+      <!-- 最初の画面: ステージ選択 -->
+      <section id="screen-home">
+        <header class="header">
+          <h1>ダイノラン</h1>
+          <button id="sound-button" type="button" class="icon-button" aria-label="音" aria-pressed="true">🔊</button>
+        </header>
+        <p class="muted">タップでジャンプ。サボテンや岩をよけて、旗(ゴール)までたどりつこう。</p>
+        <p id="progress-summary" class="progress-summary" aria-live="polite"></p>
+        <ol id="stage-list" class="stage-list" aria-label="ステージ"></ol>
 
-      <!-- サンプル: タップ回数を数える。本番では置き換える -->
-      <section class="card">
-        <p class="count" id="count" aria-live="polite">0</p>
-        <p class="muted">最高記録: <span id="best">0</span></p>
-        <button id="tap-button" type="button" class="primary">タップ</button>
-        <button id="reset-button" type="button">リセット</button>
-      </section>
+      <button id="ending-open" type="button" hidden>🎉 エンディングをもういちど見る</button>
 
       <details class="backup">
         <summary>記録のバックアップ</summary>
@@ -43,6 +43,36 @@
       <button id="install-open" type="button" class="link">📲 アプリとしてインストールする方法</button>
 
       <p class="muted version">v<span id="version"></span></p>
+      </section>
+
+      <!-- エンディング(全ステージクリア) -->
+      <section id="screen-ending" class="ending" hidden>
+        <canvas id="ending-canvas" class="game-canvas" role="img" aria-label="夜があけて、恐竜がゴールの旗の前でよろこんでいます"></canvas>
+        <h2>ぜんぶクリア! おめでとう!</h2>
+        <p>10のステージを走りぬけて、恐竜はとうとう朝を迎えました。<br />サボテンも岩も、もうこわくありません。</p>
+        <p id="ending-stats" class="muted"></p>
+        <button id="ending-close" type="button" class="primary">ステージ選択へ</button>
+      </section>
+
+      <!-- ゲーム画面 -->
+      <section id="screen-game" class="game" hidden>
+        <div class="hud">
+          <button id="game-back" type="button" aria-label="ステージ選択にもどる">もどる</button>
+          <span id="game-title" class="hud-title"></span>
+        </div>
+        <div class="progress" aria-hidden="true"><div id="progress-bar" class="progress-bar"></div></div>
+        <div class="stage-wrap">
+          <canvas id="game-canvas" class="game-canvas" role="img" aria-label="ゲーム画面。走る恐竜が、サボテンや岩をジャンプでよけます"></canvas>
+          <p id="game-hint" class="game-hint">タップでスタート</p>
+        </div>
+        <div id="game-pad" class="pad" aria-hidden="true">タップ(スペースキー)でジャンプ<br /><small>押し続けると高く跳べる</small></div>
+        <div id="game-overlay" class="overlay" hidden>
+          <h2 id="overlay-title"></h2>
+          <p id="overlay-text" class="muted"></p>
+          <div id="overlay-buttons" class="overlay-buttons"></div>
+        </div>
+        <p id="game-status" class="sr-only" role="status" aria-live="polite"></p>
+      </section>
     </main>
 
     <!-- インストール方法（最初の画面から開く） -->
