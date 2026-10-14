@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { STAGES } from '../src/stages';
+import { createEndless } from '../src/endless';
+import type { StageDef } from '../src/logic';
 import { findPlan } from '../tests/solver';
 
 // アプリの ID（package.json の name）。保存データのキーの接頭辞になる
@@ -256,7 +258,7 @@ test('版 1 の古い進み具合(たまごや★の項目がない)も読み込
   await expect(page.getByRole('button', { name: /ステージ2 さばく\(クリア済み、ほし1つ\)/ })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'ステージ3 ゆうやけ' })).toBeEnabled();
   // 版番号が新しくなっている
-  expect(await page.evaluate((id) => localStorage.getItem(`${id}-schema`), APP_ID)).toBe('2');
+  expect(await page.evaluate((id) => localStorage.getItem(`${id}-schema`), APP_ID)).toBe('3');
 });
 
 test('演出: たまごを取ると効果音が鳴る', async ({ page }) => {
@@ -272,6 +274,81 @@ test('演出: たまごを取ると効果音が鳴る', async ({ page }) => {
   // たまごを取ったときの高めの音(784)が鳴っている
   expect(await page.evaluate(() => (window as unknown as { __sounds: number[] }).__sounds)).toContain(784);
   await expect(page.locator('#egg-count')).toHaveText('3/3');
+});
+
+test('エンドレス: ステージ選択から始められ、ぶつかると走った距離が出て、ハイスコアが保存される', async ({ page }) => {
+  await page.goto('/');
+  await toSelect(page);
+  await expect(page.locator('#endless-best')).toHaveText('ハイスコアなし');
+  await page.getByRole('button', { name: /エンドレス/ }).click();
+  await expect(page.locator('#game-title')).toHaveText('エンドレス');
+  await expect(page.locator('#score')).toHaveText('0 m');
+  // ゴールのあるステージ用の表示(進み具合の棒・たまご)は出ない
+  await expect(page.locator('.progress')).toBeHidden();
+  await expect(page.locator('.egg-counter')).toBeHidden();
+  await page.locator('#game-canvas').tap();
+  await expect(page.locator('#overlay-title')).toHaveText('ざんねん!', { timeout: 10_000 });
+  await expect(page.locator('#overlay-text')).toContainText(/\d+ m 走った/);
+  await expect(page.locator('#overlay-text')).toContainText('ハイスコア更新!');
+  // もういちど: すぐに新しいコースで走り出す
+  await page.getByRole('button', { name: 'もういちど' }).click();
+  await expect(page.locator('#game-overlay')).toBeHidden();
+  await expect(page.locator('#overlay-title')).toHaveText('ざんねん!', { timeout: 10_000 });
+  await page.getByRole('button', { name: 'ステージ選択', exact: true }).click();
+  await expect(page.locator('#endless-best')).toHaveText(/ハイスコア \d+ m/);
+  // 再読み込みしても残る。ふつうのステージを開くと、棒とたまごの表示がもどる
+  await page.reload();
+  await toSelect(page);
+  await expect(page.locator('#endless-best')).toHaveText(/ハイスコア \d+ m/);
+  await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
+  await expect(page.locator('.progress')).toBeVisible();
+  await expect(page.locator('#score')).toBeHidden();
+});
+
+test('エンドレス: 専用の曲が鳴る', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as unknown as { __songs: string[] }).__songs = [];
+    document.addEventListener('app:music', (e) => (window as unknown as { __songs: string[] }).__songs.push((e as CustomEvent).detail.song));
+  });
+  await page.goto('/');
+  await toSelect(page);
+  await page.getByRole('button', { name: /エンドレス/ }).click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __songs: string[] }).__songs)).toContain('endless');
+});
+
+test('エンドレス: ソルバーの押し方で走りつづけると、スコアが増え、背景が変わっても止まらない', async ({ page }) => {
+  test.setTimeout(120_000);
+  // コースの種を固定する(乱数を 0.5 に固定すると、種は 2^30)
+  await page.addInitScript(() => { Math.random = () => 0.5; });
+  const seed = Math.floor(0.5 * 2 ** 31);
+  const course = createEndless(seed);
+  course.extend?.(9000);
+  const obstacles = course.obstacles.filter((o) => o.x < 8000);
+  const last = obstacles[obstacles.length - 1];
+  const fixed: StageDef = { ...course, obstacles, length: last.x + last.w + 1000, extend: undefined };
+  const plan = findPlan(fixed, 4);
+  expect(plan).not.toBeNull();
+
+  await page.clock.install({ time: 0 });
+  await page.goto('/');
+  await toSelect(page);
+  await page.getByRole('button', { name: /エンドレス/ }).click();
+  await page.clock.pauseAt(10_000);
+  await page.locator('#game-canvas').tap();
+  await page.mouse.move(200, 600);
+  const FRAME_MS = 1000 / 60;
+  // 約 750 m(背景が 3 回変わる)まで走る
+  for (let f = 0; f < 1100; f++) {
+    if (await page.locator('#game-overlay').isVisible()) break;
+    for (const m of plan ?? []) {
+      if (m.frame === f) await page.mouse.down();
+      if (m.frame + m.hold === f) await page.mouse.up();
+    }
+    await page.clock.runFor(Math.round((f + 1) * FRAME_MS) - Math.round(f * FRAME_MS));
+  }
+  await expect(page.locator('#game-overlay')).toBeHidden();
+  const meters = Number((await page.locator('#score').textContent())?.replace(' m', ''));
+  expect(meters).toBeGreaterThan(400);
 });
 
 test('ステージ選択にもどれる', async ({ page }) => {

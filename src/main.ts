@@ -1,15 +1,16 @@
 import './style.css';
 import { startEnding, startTitle } from './ending';
+import { createEndless } from './endless';
 import { Player } from './play';
 import {
-  allCleared, bestOf, isCleared, isUnlocked, markEndingSeen, recordAttempt, recordClear, recordDeath, sanitizeProgress, starsOf, totalAttempts, totalStars, type Progress,
+  allCleared, bestOf, isCleared, isUnlocked, markEndingSeen, recordAttempt, recordClear, recordDeath, recordEndless, sanitizeProgress, starsOf, totalAttempts, totalStars, type Progress,
 } from './progress';
 import { STAGES } from './stages';
 import { setupInstallGuide } from './install';
 import { setupUpdateBanner } from './pwa';
 import { isMusicOn, setMusicOn, setScene, syncMusic, unlockMusic } from './music';
 import { isSoundOn, setSound, sfx, syncSound } from './sound';
-import { stageSongId } from './songs';
+import { stageSongId, type SongId } from './songs';
 import { exportBackup, importBackup, load, migrateStorage, requestPersist, save } from './storage';
 import type { StageDef } from './logic';
 
@@ -91,6 +92,7 @@ function renderStageList(): void {
   const stars = `★ ${totalStars(progress, STAGES.map((s) => s.eggs.length))}/${STAGES.length * 3}`;
   $('progress-summary').textContent = done ? `★ ぜんぶクリア! (${STAGES.length}/${STAGES.length}) ・ ${stars}` : `クリア ${progress.cleared.length}/${STAGES.length} ・ ${stars}`;
   $('ending-open').hidden = !done;
+  $('endless-best').textContent = progress.endlessBest > 0 ? `ハイスコア ${progress.endlessBest} m` : 'ハイスコアなし';
   $('title-summary').textContent = progress.cleared.length > 0 ? `つづき: ${done ? '★ ぜんぶクリア!' : `クリア ${progress.cleared.length}/${STAGES.length}`}` : '';
 }
 
@@ -109,6 +111,7 @@ function show(screen: HTMLElement): void {
 // ---- ゲーム画面 ----
 
 const status = $('game-status');
+const score = $('score');
 let current: StageDef = STAGES[0];
 
 const player = new Player(
@@ -121,9 +124,21 @@ const player = new Player(
       $('egg-count').textContent = `${count}/${total}`;
     },
     onNearMiss: () => sfx('near'),
-    onDead: ({ percent, eggs }) => {
+    onDead: ({ percent, eggs, meters }) => {
       setScene(null);
       sfx('dead');
+      if (current.endless) {
+        const { progress: next, newBest } = recordEndless(progress, meters);
+        updateProgress(next);
+        renderBest();
+        const line = newBest ? 'ハイスコア更新!' : `ハイスコア ${progress.endlessBest} m`;
+        status.textContent = `ゲームオーバー。${meters}メートル走りました。${line}`;
+        showOverlay('ざんねん!', `${meters} m 走った\n${line}`, [
+          { label: 'もういちど', primary: true, run: () => restart() },
+          { label: 'ステージ選択', run: () => closeStage() },
+        ]);
+        return;
+      }
       const { progress: next, newBest } = recordDeath(progress, current.id, percent);
       updateProgress(next);
       renderBest();
@@ -165,7 +180,12 @@ const player = new Player(
         { label: 'ステージ選択', run: () => closeStage() },
       ]);
     },
-    onProgress: (ratio) => $('progress-bar').style.setProperty('width', `${Math.round(ratio * 100)}%`),
+    onProgress: (ratio, meters) => {
+      $('progress-bar').style.setProperty('width', `${Math.round(ratio * 100)}%`);
+      // スコアは、変わったときだけ書きかえる(毎フレームは書かない)
+      const text = `${meters} m`;
+      if (current.endless && score.textContent !== text) score.textContent = text;
+    },
   },
   current,
 );
@@ -203,17 +223,44 @@ function openStage(stage: StageDef): void {
   if (!isUnlocked(progress, stage.id)) return;
   current = stage;
   show(game);
+  game.classList.remove('endless');
   $('game-title').textContent = `ステージ${stage.id} ${stage.name}`;
   renderBest();
   hideOverlay();
   hint.hidden = false;
   status.textContent = '';
   player.load(stage);
-  setScene(stageSongId(stage.id), { restart: true });
+  setScene(songIdOf(stage), { restart: true });
+}
+
+/** 曲の番号。エンドレスは専用の曲 */
+const songIdOf = (stage: StageDef): SongId => (stage.endless ? 'endless' : stageSongId(stage.id));
+
+/** コースの乱数の種(エンドレスは、遊ぶたびに別のコース) */
+const newSeed = (): number => Math.floor(Math.random() * 2 ** 31);
+
+/** エンドレスモードを開く */
+function openEndless(): void {
+  current = createEndless(newSeed());
+  show(game);
+  game.classList.add('endless');
+  $('game-title').textContent = 'エンドレス';
+  $('score').textContent = '0 m';
+  renderBest();
+  hideOverlay();
+  hint.hidden = false;
+  status.textContent = '';
+  player.load(current);
+  setScene('endless', { restart: true });
 }
 
 /** 進み具合の棒に、これまででいちばん進んだ場所の印をつけ、ベストを文字でも出す */
 function renderBest(): void {
+  if (current.endless) {
+    $('best-marker').hidden = true;
+    $('game-best').textContent = progress.endlessBest > 0 ? `ハイスコア ${progress.endlessBest} m` : '';
+    return;
+  }
   const best = bestOf(progress, current.id);
   const marker = $('best-marker');
   marker.hidden = best <= 0 || best >= 100;
@@ -227,9 +274,11 @@ function restart(): void {
   hideOverlay();
   hint.hidden = true;
   status.textContent = '';
+  // エンドレスは、新しいコースで始める
+  if (current.endless) current = createEndless(newSeed());
   player.load(current);
-  updateProgress(recordAttempt(progress, current.id));
-  setScene(stageSongId(current.id), { restart: true });
+  if (!current.endless) updateProgress(recordAttempt(progress, current.id));
+  setScene(songIdOf(current), { restart: true });
   sfx('start');
   player.begin();
 }
@@ -273,8 +322,8 @@ function isControl(target: EventTarget | null): boolean {
 function pressInput(): void {
   if (player.phase === 'ready') {
     hint.hidden = true;
-    updateProgress(recordAttempt(progress, current.id));
-    setScene(stageSongId(current.id), { restart: true });
+    if (!current.endless) updateProgress(recordAttempt(progress, current.id));
+    setScene(songIdOf(current), { restart: true });
     sfx('start');
     player.begin();
   } else if (player.phase === 'playing') {
@@ -326,6 +375,7 @@ $('play-button').addEventListener('click', () => {
   renderStageList();
 });
 $('select-back').addEventListener('click', () => show(title));
+$('endless-open').addEventListener('click', openEndless);
 
 // ブラウザは、利用者が操作するまで音を出せない。最初の操作で BGM(タイトル曲)を始める
 for (const type of ['click', 'touchend', 'pointerup', 'keydown'] as const) document.addEventListener(type, unlockMusic, { capture: true });

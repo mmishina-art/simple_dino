@@ -56,13 +56,26 @@ export interface StageDef {
   length: number;
   obstacles: Obstacle[];
   eggs: Egg[];
+  /** エンドレスモード(ゴールがなく、障害物をそのつど作り足す) */
+  endless?: boolean;
+  /** 走った距離に応じた速さ(px/秒)。なければ speed のまま。エンドレスは、だんだん速くなる */
+  speedAt?: (dist: number) => number;
+  /** 走った距離に応じた背景の番号(THEMES の何番目か)。なければ、ステージの番号で決まる */
+  themeAt?: (dist: number) => number;
+  /** 距離 upTo までの障害物が足りるように、obstacles の後ろに作り足す(足すだけで、すでにあるものは変えない) */
+  extend?: (upTo: number) => void;
 }
+
+/** 恐竜の前に、これだけ先(px)まで、障害物を用意しておく */
+export const EXTEND_AHEAD = 1400;
 
 export type Status = 'running' | 'dead' | 'cleared';
 
 export interface GameState {
   stage: StageDef;
   frame: number;
+  /** 走った距離(スタートからの px)。速さが一定のステージでは、frame から決まる値と同じ */
+  dist: number;
   /** 地面からの高さ */
   y: number;
   vy: number;
@@ -81,7 +94,8 @@ export interface Input {
 }
 
 export function newGame(stage: StageDef): GameState {
-  return { stage, frame: 0, y: 0, vy: 0, grounded: true, buffer: 0, eggs: [], status: 'running' };
+  stage.extend?.(EXTEND_AHEAD);
+  return { stage, frame: 0, dist: 0, y: 0, vy: 0, grounded: true, buffer: 0, eggs: [], status: 'running' };
 }
 
 /** 恐竜の位置(スタートからの距離)。経過フレームから決まるので、誤差がたまらない */
@@ -92,7 +106,7 @@ export function distanceAt(stage: StageDef, frame: number): number {
 /** 進み具合(0〜100 の整数)。ゴールしたら 100、それまでは最大 99 */
 export function progressPercent(s: GameState): number {
   if (s.status === 'cleared') return 100;
-  return Math.min(99, Math.floor((distanceAt(s.stage, s.frame) / s.stage.length) * 100));
+  return Math.min(99, Math.floor((s.dist / s.stage.length) * 100));
 }
 
 /** 「ぎりぎり」と呼ぶ、障害物の上のすきま(px)。これより小さいすきまで越えたら、ぎりぎり */
@@ -103,7 +117,7 @@ export const NEAR_MISS_PX = 10;
  * この関数が書き換える(呼ぶ側が持ち続ける)。ぎりぎりで越えた障害物の番号を返す。
  */
 export function trackNearMiss(minClear: Map<number, number>, s: GameState): number[] {
-  const dx = distanceAt(s.stage, s.frame);
+  const dx = s.dist;
   const passed: number[] = [];
   s.stage.obstacles.forEach((o, i) => {
     if (o.x > dx + DINO_W + 4) return;
@@ -180,7 +194,8 @@ export function step(s: GameState, input: Input): GameState {
     }
   }
 
-  const dx = distanceAt(s.stage, frame);
+  const dx = s.stage.speedAt ? s.dist + s.stage.speedAt(s.dist) * DT : distanceAt(s.stage, frame);
+  s.stage.extend?.(dx + EXTEND_AHEAD);
   let status: Status = 'running';
   if (hits(s.stage.obstacles, dx, y)) status = 'dead';
   else if (dx >= s.stage.length) status = 'cleared';
@@ -189,5 +204,5 @@ export function step(s: GameState, input: Input): GameState {
     const got = s.stage.eggs.flatMap((egg, i) => (!eggs.includes(i) && touchesEgg(egg, dx, y) ? [i] : []));
     if (got.length > 0) eggs = [...eggs, ...got];
   }
-  return { stage: s.stage, frame, y, vy, grounded, buffer, eggs, status };
+  return { stage: s.stage, frame, dist: dx, y, vy, grounded, buffer, eggs, status };
 }

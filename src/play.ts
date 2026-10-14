@@ -8,7 +8,8 @@ import {
   advanceParticles, advancePopups, confetti, crash, dust, shakeOffset, sparkle, type Particle, type Popup,
 } from './fx';
 import { DINO_SCREEN_X, GROUND_Y, VIEW_H, VIEW_W, drawScene } from './render';
-import { THEMES } from './themes';
+import { meters } from './endless';
+import { themeOf } from './themes';
 
 export type Phase = 'ready' | 'playing' | 'paused' | 'dead' | 'cleared';
 
@@ -20,11 +21,11 @@ export interface PlayHandlers {
   /** 障害物をぎりぎりで越えた */
   onNearMiss(): void;
   /** やられた(少し間をおいて呼ばれる)。percent は進んだ場所(0〜99 %)、eggs はこの回に取ったたまごの数 */
-  onDead(result: { percent: number; eggs: number }): void;
+  onDead(result: { percent: number; eggs: number; meters: number }): void;
   /** ゴールした(少し間をおいて呼ばれる)。eggs はこの回に取ったたまごの番号 */
   onCleared(result: { eggs: number[] }): void;
-  /** 0〜1。進み具合 */
-  onProgress(ratio: number): void;
+  /** ratio は 0〜1 の進み具合(エンドレスは常に 0)、meters は走った距離(m) */
+  onProgress(ratio: number, meters: number): void;
 }
 
 /** やられた・ゴールしたあと、結果を出すまでの間(フレーム数) */
@@ -81,7 +82,7 @@ export class Player {
     this.popups = [];
     this.shakeLeft = 0;
     this.minClear.clear();
-    this.handlers.onProgress(0);
+    this.handlers.onProgress(0, 0);
     this.handlers.onEgg(0, stage.eggs.length);
     this.draw();
   }
@@ -148,7 +149,8 @@ export class Player {
       this.acc -= DT;
       this.onStep(prev, this.state);
     }
-    this.handlers.onProgress(Math.min(1, (this.state.frame * this.state.stage.speed * DT) / this.state.stage.length));
+    const { dist, stage } = this.state;
+    this.handlers.onProgress(stage.endless ? 0 : Math.min(1, dist / stage.length), meters(dist));
     if (this.state.status !== 'running') {
       this.phase = this.state.status;
       this.endedFrames = 0;
@@ -158,7 +160,7 @@ export class Player {
 
   /** 1 ステップごとの出来事(音と演出) */
   private onStep(prev: GameState, s: GameState): void {
-    const theme = THEMES[(s.stage.id - 1) % THEMES.length];
+    const theme = themeOf(s);
     const feet = { x: DINO_SCREEN_X + DINO_W / 2, y: GROUND_Y - 1 };
     if (!s.grounded && (prev.grounded || s.vy > prev.vy)) {
       this.handlers.onJump();
@@ -187,7 +189,7 @@ export class Player {
   /** やられた・ゴールした瞬間の演出 */
   private onEnd(): void {
     const s = this.state;
-    const theme = THEMES[(s.stage.id - 1) % THEMES.length];
+    const theme = themeOf(s);
     if (s.status === 'dead') {
       this.shakeLeft = SHAKE_FRAMES;
       this.spawn(crash(DINO_SCREEN_X + DINO_W / 2, GROUND_Y - s.y - DINO_H / 2, theme.dino, Math.random));
@@ -200,7 +202,7 @@ export class Player {
   private settle(): void {
     this.endedFrames += 1;
     if (this.endedFrames !== RESULT_DELAY) return;
-    if (this.phase === 'dead') this.handlers.onDead({ percent: progressPercent(this.state), eggs: this.state.eggs.length });
+    if (this.phase === 'dead') this.handlers.onDead({ percent: progressPercent(this.state), eggs: this.state.eggs.length, meters: meters(this.state.dist) });
     else this.handlers.onCleared({ eggs: [...this.state.eggs] });
   }
 
@@ -219,7 +221,7 @@ export class Player {
 
   private draw(): void {
     const s = this.state;
-    const theme = THEMES[(s.stage.id - 1) % THEMES.length];
+    const theme = themeOf(s);
     const shake = this.reduced ? { x: 0, y: 0 } : shakeOffset(this.shakeLeft, SHAKE_FRAMES, SHAKE_PX, s.frame + this.shakeLeft);
     drawScene(this.ctx, this.canvas.width, s, theme, {
       squash: s.frame - this.landedAt < SQUASH_FRAMES,

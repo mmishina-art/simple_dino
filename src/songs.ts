@@ -5,7 +5,7 @@
 //   例: "E5:2 G5:2 C6:4"(8 分・8 分・4 分)。「r:4」は休み。音名は C4、F#5、Bb4 のように書く(C4 = ド)。
 // コードは 1 小節に 1 つ(C、Am、G7 のように。m は短調、7 はドミナント 7th)。ベース・伴奏・ドラムは、コードから自動で作る。
 
-export type SongId = 'title' | 'ending' | `stage${number}`;
+export type SongId = 'title' | 'ending' | 'endless' | `stage${number}`;
 
 export type BassStyle = 'long' | 'quarters' | 'pulse' | 'bounce';
 export type ArpStyle = 'none' | 'eighths' | 'sixteenths';
@@ -201,6 +201,21 @@ export const SONGS: readonly Song[] = [
       'F#6:2 D#6:2 B5:2 F#5:2 D#5:2 F#5:2 B5:4',
     ],
     scale: ['E', 'F#', 'G', 'A', 'B', 'C', 'D', 'D#'], lead: 'square', bass: 'pulse', arp: 'none', drums: 'drive',
+  },
+  {
+    id: 'endless', name: 'はてしないみち', bpm: 138,
+    chords: ['Am', 'F', 'C', 'G', 'Am', 'F', 'G', 'E'],
+    melody: [
+      'A5:2 C6:2 E6:2 C6:2 A5:2 C6:2 E6:4',
+      'F5:2 A5:2 C6:2 A5:2 F5:2 A5:2 C6:4',
+      'G5:2 C6:2 E6:2 C6:2 G5:2 C6:2 E6:4',
+      'G5:2 B5:2 D6:2 B5:2 G5:2 B5:2 D6:4',
+      'A5:2 C6:2 E6:2 A6:2 G6:2 E6:2 C6:2 E6:2',
+      'F6:2 E6:2 C6:2 A5:2 F5:2 A5:2 C6:2 A5:2',
+      'D6:2 G6:2 B6:2 G6:2 D6:2 B5:2 G5:2 B5:2',
+      'E6:2 G#6:2 B6:2 G#6:2 E6:2 B5:2 G#5:2 B5:2',
+    ],
+    scale: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'G#'], lead: 'square', bass: 'pulse', arp: 'none', drums: 'drive',
   },
   {
     id: 'ending', name: 'あさやけ', bpm: 96,

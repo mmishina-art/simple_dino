@@ -1,7 +1,7 @@
 // Canvas への描画。ゲームの状態(GameState)を絵にするだけで、ルールには触れない。
 // 座標は論理 px(横 VIEW_W × 縦 VIEW_H)。実際の画面の大きさに合わせて、scale 倍で描く。
 // ドット絵がにじまないよう、四角は端末の px にそろえて塗る。
-import { DINO_W, EGG_H, EGG_W, distanceAt, type GameState, type ObstacleKind } from './logic';
+import { DINO_W, EGG_H, EGG_W, type GameState, type ObstacleKind } from './logic';
 import type { Particle, Popup } from './fx';
 import { DINO, EGG, SPRITES, squashed, type Sprite } from './sprites';
 import { THEMES, type Theme } from './themes';
@@ -192,7 +192,7 @@ export function drawScene(c: CanvasRenderingContext2D, width: number, state: Gam
   const s0 = width / VIEW_W;
   const p: Pen = { c, s: s0, ox: Math.round((opts.shake?.x ?? 0) * s0), oy: Math.round((opts.shake?.y ?? 0) * s0) };
   const { stage } = state;
-  const d = distanceAt(stage, state.frame);
+  const d = state.dist;
 
   // 空(横じまの段で、ドット絵らしくする)
   const bandH = GROUND_Y / SKY_BANDS;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  allCleared, bestOf, emptyProgress, isUnlocked, markEndingSeen, recordAttempt, recordClear, recordDeath, sanitizeProgress, starsOf, totalAttempts, totalStars,
+  allCleared, bestOf, emptyProgress, isUnlocked, markEndingSeen, recordAttempt, recordClear, recordDeath, recordEndless, sanitizeProgress, starsOf, totalAttempts, totalStars,
 } from '../src/progress';
 
 describe('ステージの解放', () => {
@@ -61,6 +61,7 @@ describe('保存されていた値の検査', () => {
     const p = {
       cleared: [1, 2, 3], attempts: { '1': 2, '3': 5 }, firstClearTries: { '1': 2 }, endingSeen: true,
       bestPercent: { '4': 62, '1': 100 }, eggs: { '1': [0, 2], '2': [0] }, perfect: [1],
+      endlessBest: 1234, endlessRuns: 5,
     };
     expect(sanitizeProgress(JSON.parse(JSON.stringify(p)), 10)).toEqual(p);
   });
@@ -93,6 +94,40 @@ describe('保存されていた値の検査', () => {
     expect(p.bestPercent).toEqual({ '3': 40 });
     expect(p.eggs).toEqual({ '1': [0, 2] });
     expect(p.perfect).toEqual([1]);
+  });
+});
+
+describe('エンドレスのハイスコア', () => {
+  it('はじめての結果はハイスコア。遊んだ回数も数える', () => {
+    const r = recordEndless(emptyProgress(), 350);
+    expect(r.newBest).toBe(true);
+    expect(r.progress.endlessBest).toBe(350);
+    expect(r.progress.endlessRuns).toBe(1);
+  });
+
+  it('ハイスコアより低い・同じ結果では、更新しない(回数は増える)', () => {
+    const first = recordEndless(emptyProgress(), 500).progress;
+    const lower = recordEndless(first, 300);
+    expect(lower.newBest).toBe(false);
+    expect(lower.progress.endlessBest).toBe(500);
+    expect(lower.progress.endlessRuns).toBe(2);
+    expect(recordEndless(first, 500).newBest).toBe(false);
+    const higher = recordEndless(first, 501);
+    expect(higher.newBest).toBe(true);
+    expect(higher.progress.endlessBest).toBe(501);
+  });
+
+  it('小数・負の値・大きすぎる値は、整数の 0〜999999 にする', () => {
+    expect(recordEndless(emptyProgress(), 99.9).progress.endlessBest).toBe(99);
+    expect(recordEndless(emptyProgress(), -5).progress.endlessBest).toBe(0);
+    expect(recordEndless(emptyProgress(), 5_000_000).progress.endlessBest).toBe(999_999);
+  });
+
+  it('古い記録(版 2 まで)には項目がなく、0 として読む。壊れた値は捨てる', () => {
+    expect(sanitizeProgress({ cleared: [1] }, 10).endlessBest).toBe(0);
+    const bad = sanitizeProgress({ endlessBest: -3, endlessRuns: 'x' }, 10);
+    expect(bad.endlessBest).toBe(0);
+    expect(bad.endlessRuns).toBe(0);
   });
 });
 

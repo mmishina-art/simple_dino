@@ -1,8 +1,19 @@
 // テスト用の「解けるか調べる」仕組み。ジャンプの押し方(いつ押して、何フレーム押し続けるか)を総当たりして、
 // 障害物に当たらずゴールできるかを調べる。ゲームと同じ物理(src/game.ts)を使う。
-import { JUMP_V, distanceAt, goalFrame, hits, stepBody, touchesEgg, type StageDef } from '../src/logic';
+import { DT, JUMP_V, distanceAt, goalFrame, hits, stepBody, touchesEgg, type StageDef } from '../src/logic';
 
 const MAX_HOLD = 40;
+
+/** フレームごとの、走った距離(ゴールに着くフレームまで)。速さが変わるコース(エンドレス)にも対応 */
+export function frameDistances(stage: StageDef): Float64Array {
+  if (!stage.speedAt) {
+    const n = goalFrame(stage);
+    return Float64Array.from({ length: n + 1 }, (_, f) => distanceAt(stage, f));
+  }
+  const list = [0];
+  while (list[list.length - 1] < stage.length) list.push(list[list.length - 1] + stage.speedAt(list[list.length - 1]) * DT);
+  return Float64Array.from(list);
+}
 
 /** ジャンプを pressed した次のフレームから、着地までの高さ。hold は押し続けるフレーム数 */
 export function jumpTrajectory(hold: number): number[] {
@@ -32,17 +43,18 @@ export interface Move {
  * eggShrink を渡すと、たまごを全部取る(取る範囲を eggShrink px せまくしても)押し方だけを探す。
  */
 export function findPlan(stage: StageDef, margin: number, eggShrink?: number): Move[] | null {
-  const total = goalFrame(stage);
+  const dists = frameDistances(stage);
+  const total = dists.length - 1;
   const withEggs = eggShrink !== undefined;
   const eggs = withEggs ? stage.eggs : [];
   const shrink = eggShrink ?? 0;
-  const safe = (f: number, y: number): boolean => !hits(stage.obstacles, distanceAt(stage, f), y, margin);
+  const safe = (f: number, y: number): boolean => !hits(stage.obstacles, dists[f], y, margin);
 
   // フレームごとに、恐竜が横にかさなっているたまごの番号(なければ -1)。たまごどうしは離れているので、同時に 1 つだけ
   const eggAt = new Int16Array(total + 1).fill(-1);
   if (withEggs) {
     for (let f = 0; f <= total; f++) {
-      const dx = distanceAt(stage, f);
+      const dx = dists[f];
       eggs.forEach((e, i) => {
         if (touchesEgg(e, dx, e.y, shrink)) eggAt[f] = i;
       });
@@ -60,7 +72,7 @@ export function findPlan(stage: StageDef, margin: number, eggShrink?: number): M
         cur = e;
         got = 0;
       }
-      if (e >= 0 && touchesEgg(eggs[e], distanceAt(stage, f + k), ys[k - 1], shrink)) got = 1;
+      if (e >= 0 && touchesEgg(eggs[e], dists[f + k], ys[k - 1], shrink)) got = 1;
     }
     return cur >= 0 ? got : 0;
   };

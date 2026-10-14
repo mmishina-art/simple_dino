@@ -35,6 +35,7 @@ export function requestPersist(): void {
 function migrate(from: number): void {
   // 版 1 → 2: 進み具合(progress)に、ベスト %・取ったたまご・★の項目が増えた。
   // 古い記録には、その項目がないだけなので、変換は要らない(progress.ts の sanitizeProgress が、ない項目を空として読む)。
+  // 版 2 → 3: 進み具合に、エンドレスのハイスコアと遊んだ回数が増えた(これも、ない項目は 0 として読むだけ)。
   void from;
 }
 
