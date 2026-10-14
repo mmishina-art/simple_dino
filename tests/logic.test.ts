@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BUFFER_FRAMES, DINO_W, FPS, JUMP_V, distanceAt, goalFrame, hits, newGame, step, stepBody, touchesEgg, trackNearMiss, progressPercent, NEAR_MISS_PX, type GameState, type Input, type StageDef,
+  DT, BOOST_FRAMES, BOOST_MAX, BOOST_RAMP, BOOST_STEP, BUFFER_FRAMES, DINO_W, MEAT_PICKUP, MEAT_W, MULT_STEP, approachFactor, boostTarget, scoreMultiplier, FPS, JUMP_V, distanceAt, goalFrame, hits, newGame, step, stepBody, touchesEgg, touchesMeat, trackNearMiss, progressPercent, NEAR_MISS_PX, type GameState, type Input, type StageDef,
 } from '../src/logic';
 
 const NONE: Input = { pressed: false, held: false };
@@ -134,6 +134,130 @@ describe('たまご', () => {
     expect(touchesEgg(egg, 100 - DINO_W - 3, 0)).toBe(true);
     expect(touchesEgg(egg, 100 - DINO_W - 3, 0, 2)).toBe(false);
     expect(touchesEgg(egg, 100 - DINO_W - 5, 0)).toBe(false);
+  });
+});
+
+describe('肉(速さとスコア倍率)', () => {
+  /** 障害物のない、エンドレスの走り(速さは一定の 200px/s)に、肉だけを置く */
+  const withMeats = (...xs: number[]): StageDef => ({
+    id: 0, name: 'meat', speed: 200, length: Infinity, obstacles: [], eggs: [], endless: true,
+    speedAt: () => 200, meats: xs.map((x) => ({ x, y: 0 })),
+  });
+  const run = (s: GameState, frames: number): GameState => {
+    for (let i = 0; i < frames; i++) s = step(s, NONE);
+    return s;
+  };
+
+  it('レベルと速さと倍率の決め方', () => {
+    expect(boostTarget(0)).toBe(1);
+    expect(boostTarget(3)).toBeCloseTo(1 + 3 * BOOST_STEP, 10);
+    expect(scoreMultiplier(0)).toBe(1);
+    expect(scoreMultiplier(2)).toBeCloseTo(1 + 2 * MULT_STEP, 10);
+    expect(BOOST_MAX).toBe(3);
+    expect(boostTarget(BOOST_MAX)).toBeLessThanOrEqual(1.25);
+  });
+
+  it('速さの倍率は、目標へゆるやかに近づく(急に変わらない)', () => {
+    expect(approachFactor(1, 1)).toBeCloseTo(1 + BOOST_RAMP, 10);
+    expect(approachFactor(1.0799, 1)).toBe(1.08);
+    expect(approachFactor(1.08, 1)).toBe(1.08);
+    expect(approachFactor(1.08, 0)).toBeCloseTo(1.08 - BOOST_RAMP, 10);
+    // 0.5 秒かけて、+8% に着く
+    let f = 1;
+    for (let i = 0; i < 31; i++) f = approachFactor(f, 1);
+    expect(f).toBe(1.08);
+  });
+
+  it('地面の肉を通ると、レベルが 1 上がる。同じ肉は 2 回数えない', () => {
+    let s = newGame(withMeats(300));
+    expect(s.boost).toBe(0);
+    s = run(s, 120);
+    expect(s.meats).toEqual([0]);
+    expect(s.boost).toBe(1);
+    expect(s.topBoost).toBe(1);
+    expect(s.boostLeft).toBeGreaterThan(BOOST_FRAMES - 100);
+  });
+
+  it('レベルが上がると、速さがゆるやかに +8% まで上がり、スコアの倍率が上がる', () => {
+    const plain = run(newGame(withMeats()), 200);
+    let s = newGame(withMeats(300));
+    s = run(s, 100); // 肉(300px)を取った直後
+    const gain = (st: GameState): number => {
+      const next = step(st, NONE);
+      return next.score - st.score;
+    };
+    const before = gain(run(newGame(withMeats()), 80));
+    s = run(s, 60);
+    expect(s.factor).toBe(1.08);
+    // 速さが +8%、倍率が ×1.5 なので、1 フレームのスコアは 1.08 × 1.5 倍
+    expect(gain(s) / before).toBeCloseTo(1.08 * 1.5, 4);
+    // 走った距離も +8%
+    const d0 = s.dist;
+    expect(step(s, NONE).dist - d0).toBeCloseTo(200 * 1.08 * DT, 8);
+    expect(plain.dist).toBeGreaterThan(0);
+  });
+
+  it('レベルは重なる(最大 3)。それ以上は、上がらない', () => {
+    // 肉を 5 つ、間をあけずに置く
+    let s = newGame(withMeats(300, 400, 500, 600, 700));
+    s = run(s, 300);
+    expect(s.meats.length).toBe(5);
+    expect(s.boost).toBe(BOOST_MAX);
+    expect(s.topBoost).toBe(BOOST_MAX);
+  });
+
+  it('取らないと、時間でレベルが 1 つずつ下がり、速さも元にもどる', () => {
+    let s = newGame(withMeats(300, 400));
+    s = run(s, 150);
+    expect(s.boost).toBe(2);
+    // 2 回目の肉から BOOST_FRAMES たつと 1 つ下がる
+    s = run(s, BOOST_FRAMES);
+    expect(s.boost).toBe(1);
+    expect(s.boostLeft).toBeGreaterThan(0);
+    s = run(s, BOOST_FRAMES);
+    expect(s.boost).toBe(0);
+    expect(s.boostLeft).toBe(0);
+    s = run(s, 60);
+    expect(s.factor).toBe(1);
+    expect(s.topBoost).toBe(2);
+  });
+
+  it('肉を取ると、レベルが下がるまでの時間がもどる', () => {
+    let s = newGame(withMeats(300, 1500));
+    s = run(s, 100);
+    expect(s.boost).toBe(1);
+    // 1 つ目の効き目が切れるぎりぎりまで走って、2 つ目を取る
+    while (s.dist < 1560 && s.boost > 0) s = step(s, NONE);
+    expect(s.meats).toEqual([0, 1]);
+    expect(s.boost).toBe(2);
+    expect(s.boostLeft).toBeGreaterThan(BOOST_FRAMES - 60);
+  });
+
+  it('空中の肉は、ジャンプしないと取れない', () => {
+    const stage: StageDef = { ...withMeats(), meats: [{ x: 300, y: 90 }] };
+    expect(run(newGame(stage), 200).meats).toEqual([]);
+    let s = newGame(stage);
+    while (s.status === 'running' && s.frame < 200) {
+      const near = s.dist > 300 - 40 - 24;
+      s = step(s, near ? { pressed: s.grounded, held: true } : NONE);
+    }
+    expect(s.meats).toEqual([0]);
+  });
+
+  it('ふつうのステージ(エンドレスでない)では、肉も倍率も効かない。スコアは距離(10px = 1 点)', () => {
+    const s = run(newGame(flat), 120);
+    expect(s.boost).toBe(0);
+    expect(s.factor).toBe(1);
+    expect(s.score).toBeCloseTo(s.dist / 10, 6);
+  });
+
+  it('取る範囲の判定(たまごと同じ考え方)', () => {
+    const meat = { x: 100, y: 0 };
+    expect(touchesMeat(meat, 100 - DINO_W - MEAT_PICKUP + 1, 0)).toBe(true);
+    expect(touchesMeat(meat, 100 - DINO_W - MEAT_PICKUP - 1, 0)).toBe(false);
+    expect(touchesMeat(meat, 100 + MEAT_W + MEAT_PICKUP - 1, 0)).toBe(true);
+    expect(touchesMeat(meat, 100 + MEAT_W + MEAT_PICKUP + 1, 0)).toBe(false);
+    expect(touchesMeat({ x: 100, y: 90 }, 100, 0)).toBe(false);
   });
 });
 

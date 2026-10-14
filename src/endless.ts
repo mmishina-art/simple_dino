@@ -2,7 +2,7 @@
 // 部品は src/stages.ts と同じ書き方(障害物の記号と、ミリ秒のすきま)。部品ごとに、どの速さでもクリアできることを
 // tests/endless.test.ts がソルバーで確かめている(だから、どの順番でつないでも、かならず越えられる)。
 // コースは乱数の種(seed)で決まる。同じ種なら、同じコースになる。
-import type { Obstacle, StageDef } from './logic';
+import { MEAT_W, type Meat, type Obstacle, type StageDef } from './logic';
 import { parseLayout } from './stages';
 
 /** 走り出しの速さと、いくら走っても超えない速さ(px/秒) */
@@ -50,12 +50,14 @@ export const CHUNKS: readonly Chunk[] = [
   { tier: 3, layout: 'S 330 S 330 S' },
   { tier: 3, layout: 'B 90 B 90 B' },
   { tier: 3, layout: 'R 350 T' },
-  { tier: 3, layout: 'T 350 B' },
+  { tier: 3, layout: 'T 440 B' },
 ];
 
 /** 走った距離ごとの、難しさの段階と、部品どうしのすきま(ミリ秒の幅) */
 const TIER_START: readonly number[] = [0, 2500, 5500, 9500];
 const REST_MS: readonly (readonly [number, number])[] = [[1200, 1800], [1000, 1500], [900, 1300], [800, 1100]];
+/** 部品のあとに肉を置く確率(段階ごと)。ほぼ 7 秒に 1 個。取ると効き目が約 8 秒続くので、続けて取ると高いレベルになる */
+const MEAT_CHANCE: readonly number[] = [0.2, 0.22, 0.25, 0.28];
 /** 最初の障害物までの時間(ミリ秒) */
 const FIRST_MS = 1500;
 
@@ -80,6 +82,9 @@ export function mulberry32(seed: number): () => number {
 export function createEndless(seed: number): StageDef {
   const rand = mulberry32(seed);
   const obstacles: Obstacle[] = [];
+  const meats: Meat[] = [];
+  // 肉の乱数は、障害物の乱数とは別にする(肉を足しても、障害物のコースは変わらない)
+  const meatRand = mulberry32(seed ^ 0x9e3779b9);
   let cursor = (FIRST_MS * START_SPEED) / 1000;
 
   const pick = (dist: number): Chunk => {
@@ -89,6 +94,31 @@ export function createEndless(seed: number): StageDef {
     return pool[Math.floor(rand() * pool.length)];
   };
 
+  /**
+   * 部品のあとに、肉を置くことがある。取るのは、障害物をよけるジャンプの途中でできるように置く:
+   * - すきまの地面(ジャンプしなくても取れる)
+   * - 障害物が 1 つだけの部品: その真上(少し高い所と、高い所)
+   * - 障害物が 2 つ以上の部品: 越える直前(ジャンプの上り)か、越えた直後(下り)の、まだ低い所。
+   *   真上は、長いジャンプのいちばん高い所を通るので、肉の高さにとどかない
+   */
+  const placeMeat = (chunk: Obstacle[], chunkEnd: number, restPx: number, tier: number): void => {
+    if (meatRand() >= MEAT_CHANCE[tier]) return;
+    const kind = meatRand();
+    const tallest = Math.max(...chunk.map((o) => o.h));
+    const first = chunk[0].x;
+    const last = chunk[chunk.length - 1].x + chunk[chunk.length - 1].w;
+    if (kind < 0.3) {
+      meats.push({ x: Math.round(chunkEnd + restPx / 2 - MEAT_W / 2), y: 0 });
+    } else if (chunk.length === 1) {
+      const y = kind < 0.65 ? tallest + 14 : tallest + 44;
+      meats.push({ x: Math.round((first + last) / 2 - MEAT_W / 2), y: Math.min(y, 104) });
+    } else if (kind < 0.65) {
+      meats.push({ x: Math.round(first - 40 - MEAT_W), y: 34 });
+    } else {
+      meats.push({ x: Math.round(last + 26), y: 34 });
+    }
+  };
+
   return {
     id: 0,
     name: 'エンドレス',
@@ -96,6 +126,7 @@ export function createEndless(seed: number): StageDef {
     length: Infinity,
     obstacles,
     eggs: [],
+    meats,
     endless: true,
     speedAt: endlessSpeed,
     themeAt: endlessTheme,
@@ -105,10 +136,13 @@ export function createEndless(seed: number): StageDef {
         const chunk = pick(cursor);
         const { obstacles: placed, length } = parseLayout(speed, chunk.layout);
         for (const o of placed) obstacles.push({ ...o, x: cursor + o.x });
-        const [lo, hi] = REST_MS[tierAt(cursor)];
+        const tier = tierAt(cursor);
+        const [lo, hi] = REST_MS[tier];
         // すきまは 10ms 単位の乱数
         const rest = lo + Math.floor((rand() * (hi - lo)) / 10) * 10;
-        cursor += length + (rest * endlessSpeed(cursor + length)) / 1000;
+        const restPx = (rest * endlessSpeed(cursor + length)) / 1000;
+        placeMeat(placed.map((o) => ({ ...o, x: cursor + o.x })), cursor + length, restPx, tier);
+        cursor += length + restPx;
       }
     },
   };

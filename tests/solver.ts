@@ -5,13 +5,17 @@ import { DT, JUMP_V, distanceAt, goalFrame, hits, stepBody, touchesEgg, type Sta
 const MAX_HOLD = 40;
 
 /** フレームごとの、走った距離(ゴールに着くフレームまで)。速さが変わるコース(エンドレス)にも対応 */
-export function frameDistances(stage: StageDef): Float64Array {
+export function frameDistances(stage: StageDef, factorAt?: (frame: number) => number): Float64Array {
   if (!stage.speedAt) {
     const n = goalFrame(stage);
     return Float64Array.from({ length: n + 1 }, (_, f) => distanceAt(stage, f));
   }
   const list = [0];
-  while (list[list.length - 1] < stage.length) list.push(list[list.length - 1] + stage.speedAt(list[list.length - 1]) * DT);
+  // factorAt: 肉による速さの倍率(フレームごと)。このあとの frame 番目のステップの倍率
+  while (list[list.length - 1] < stage.length) {
+    const f = list.length;
+    list.push(list[list.length - 1] + stage.speedAt(list[list.length - 1]) * (factorAt?.(f) ?? 1) * DT);
+  }
   return Float64Array.from(list);
 }
 
@@ -42,8 +46,8 @@ export interface Move {
  * margin だけ判定を厳しくしても、ゴールできる押し方。できなければ null。
  * eggShrink を渡すと、たまごを全部取る(取る範囲を eggShrink px せまくしても)押し方だけを探す。
  */
-export function findPlan(stage: StageDef, margin: number, eggShrink?: number): Move[] | null {
-  const dists = frameDistances(stage);
+export function findPlan(stage: StageDef, margin: number, eggShrink?: number, factorAt?: (frame: number) => number): Move[] | null {
+  const dists = frameDistances(stage, factorAt);
   const total = dists.length - 1;
   const withEggs = eggShrink !== undefined;
   const eggs = withEggs ? stage.eggs : [];
@@ -124,8 +128,8 @@ export function findPlan(stage: StageDef, margin: number, eggShrink?: number): M
 }
 
 /** margin だけ判定を厳しくしても、ゴールできるか */
-export function canClear(stage: StageDef, margin: number, eggShrink?: number): boolean {
-  return findPlan(stage, margin, eggShrink) !== null;
+export function canClear(stage: StageDef, margin: number, eggShrink?: number, factorAt?: (frame: number) => number): boolean {
+  return findPlan(stage, margin, eggShrink, factorAt) !== null;
 }
 
 /** 判定を何 px 厳しくしても解けるか(大きいほど、ゆとりがあって易しい)。0 でも解けなければ -1 */

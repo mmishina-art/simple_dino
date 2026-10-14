@@ -47,6 +47,40 @@ export interface Egg {
   y: number;
 }
 
+/**
+ * 肉(エンドレスだけ): 取るとレベルが 1 上がる(最大 BOOST_MAX)。レベルが高いほど速くなり、スコアの倍率が上がる。
+ * レベルは BOOST_FRAMES ごとに 1 つ下がる(肉を取ると、その時間がもどる)。
+ */
+export const MEAT_W = 18;
+export const MEAT_H = 16;
+export const MEAT_PICKUP = 4;
+export const BOOST_MAX = 3;
+/** 1 レベルあたりの、速さの上がり幅(0.08 = +8%)と、スコア倍率の上がり幅 */
+export const BOOST_STEP = 0.08;
+export const MULT_STEP = 0.5;
+/** レベルが 1 つ下がるまでのフレーム数(約 8 秒) */
+export const BOOST_FRAMES = 480;
+/** 速さの倍率が、目標に向かって 1 フレームに変わる量(+8% に約 0.5 秒かけて近づく) */
+export const BOOST_RAMP = 0.16 * DT;
+
+export interface Meat {
+  /** 左端の位置(スタートからの距離) */
+  x: number;
+  /** 肉の底の、地面からの高さ */
+  y: number;
+}
+
+/** レベルに対する、速さの目標の倍率と、スコアの倍率 */
+export const boostTarget = (level: number): number => 1 + BOOST_STEP * level;
+export const scoreMultiplier = (level: number): number => 1 + MULT_STEP * level;
+
+/** 速さの倍率 factor を、レベルの目標に向かって、ゆるやかに近づける(急に速くしない) */
+export function approachFactor(factor: number, level: number): number {
+  const target = boostTarget(level);
+  if (Math.abs(target - factor) <= BOOST_RAMP) return target;
+  return factor + Math.sign(target - factor) * BOOST_RAMP;
+}
+
 export interface StageDef {
   id: number;
   name: string;
@@ -56,6 +90,8 @@ export interface StageDef {
   length: number;
   obstacles: Obstacle[];
   eggs: Egg[];
+  /** 肉(エンドレスだけ)。位置の順。extend で作り足される */
+  meats?: Meat[];
   /** エンドレスモード(ゴールがなく、障害物をそのつど作り足す) */
   endless?: boolean;
   /** 走った距離に応じた速さ(px/秒)。なければ speed のまま。エンドレスは、だんだん速くなる */
@@ -83,6 +119,16 @@ export interface GameState {
   buffer: number;
   /** 取ったたまごの番号(stage.eggs の何番目か)。取った順 */
   eggs: number[];
+  /** 肉のレベル(0〜BOOST_MAX)と、次にレベルが下がるまでのフレーム数 */
+  boost: number;
+  boostLeft: number;
+  /** いまの速さの倍率(レベルに向かって、ゆるやかに変わる) */
+  factor: number;
+  /** スコア(走った距離 m × そのときの倍率)。小数のまま持ち、表示のときに切りすてる */
+  score: number;
+  /** 取った肉の番号(stage.meats の何番目か)と、いちばん高かったレベル */
+  meats: number[];
+  topBoost: number;
   status: Status;
 }
 
@@ -95,7 +141,7 @@ export interface Input {
 
 export function newGame(stage: StageDef): GameState {
   stage.extend?.(EXTEND_AHEAD);
-  return { stage, frame: 0, dist: 0, y: 0, vy: 0, grounded: true, buffer: 0, eggs: [], status: 'running' };
+  return { stage, frame: 0, dist: 0, y: 0, vy: 0, grounded: true, buffer: 0, eggs: [], boost: 0, boostLeft: 0, factor: 1, score: 0, meats: [], topBoost: 0, status: 'running' };
 }
 
 /** 恐竜の位置(スタートからの距離)。経過フレームから決まるので、誤差がたまらない */
@@ -153,6 +199,12 @@ export function touchesEgg(egg: Egg, dx: number, y: number, shrink = 0): boolean
   return dx + DINO_W > egg.x - pad && dx < egg.x + EGG_W + pad && y + DINO_H > egg.y - pad && y < egg.y + EGG_H + pad;
 }
 
+/** 恐竜(左端 dx・高さ y)が、肉を取れる位置か(たまごと同じ考え方) */
+export function touchesMeat(meat: Meat, dx: number, y: number, shrink = 0): boolean {
+  const pad = MEAT_PICKUP - shrink;
+  return dx + DINO_W > meat.x - pad && dx < meat.x + MEAT_W + pad && y + DINO_H > meat.y - pad && y < meat.y + MEAT_H + pad;
+}
+
 /** 空中の動き 1 ステップ(縦方向だけ) */
 export function stepBody(y: number, vy: number, held: boolean): { y: number; vy: number; landed: boolean } {
   const g = held && vy > 0 ? GRAVITY_HOLD : GRAVITY;
@@ -194,7 +246,9 @@ export function step(s: GameState, input: Input): GameState {
     }
   }
 
-  const dx = s.stage.speedAt ? s.dist + s.stage.speedAt(s.dist) * DT : distanceAt(s.stage, frame);
+  // 速さ: エンドレスは、距離に応じた速さに、肉のレベルの倍率をかける
+  const factor = s.stage.speedAt ? approachFactor(s.factor, s.boost) : 1;
+  const dx = s.stage.speedAt ? s.dist + s.stage.speedAt(s.dist) * factor * DT : distanceAt(s.stage, frame);
   s.stage.extend?.(dx + EXTEND_AHEAD);
   let status: Status = 'running';
   if (hits(s.stage.obstacles, dx, y)) status = 'dead';
@@ -204,5 +258,25 @@ export function step(s: GameState, input: Input): GameState {
     const got = s.stage.eggs.flatMap((egg, i) => (!eggs.includes(i) && touchesEgg(egg, dx, y) ? [i] : []));
     if (got.length > 0) eggs = [...eggs, ...got];
   }
-  return { stage: s.stage, frame, dist: dx, y, vy, grounded, buffer, eggs, status };
+
+  // 肉: 取るとレベルが上がる。取らないと、時間でレベルが下がる
+  let { boost, boostLeft, meats, topBoost } = s;
+  const score = s.score + ((dx - s.dist) / 10) * scoreMultiplier(boost);
+  if (boost > 0 && --boostLeft <= 0) {
+    boost -= 1;
+    boostLeft = boost > 0 ? BOOST_FRAMES : 0;
+  }
+  const allMeats = s.stage.meats;
+  if (allMeats && status !== 'dead') {
+    for (let i = 0; i < allMeats.length; i++) {
+      const m = allMeats[i];
+      if (m.x > dx + DINO_W + MEAT_PICKUP) break;
+      if (m.x + MEAT_W < dx - MEAT_PICKUP || !touchesMeat(m, dx, y) || meats.includes(i)) continue;
+      meats = [...meats, i];
+      boost = Math.min(BOOST_MAX, boost + 1);
+      boostLeft = BOOST_FRAMES;
+      topBoost = Math.max(topBoost, boost);
+    }
+  }
+  return { stage: s.stage, frame, dist: dx, y, vy, grounded, buffer, eggs, boost, boostLeft, factor, score, meats, topBoost, status };
 }
