@@ -34,6 +34,19 @@ export interface Obstacle {
   h: number;
 }
 
+/** たまご: ステージの途中に浮かんでいて、取ると★の評価に数えられる(取れなくてもクリアはできる) */
+export const EGG_W = 14;
+export const EGG_H = 16;
+/** 取る判定は、見た目より少し広くして、取りやすくする */
+export const EGG_PICKUP = 4;
+
+export interface Egg {
+  /** 左端の位置(スタートからの距離) */
+  x: number;
+  /** たまごの底の、地面からの高さ */
+  y: number;
+}
+
 export interface StageDef {
   id: number;
   name: string;
@@ -42,6 +55,7 @@ export interface StageDef {
   /** ゴールの位置(スタートからの距離) */
   length: number;
   obstacles: Obstacle[];
+  eggs: Egg[];
 }
 
 export type Status = 'running' | 'dead' | 'cleared';
@@ -54,6 +68,8 @@ export interface GameState {
   vy: number;
   grounded: boolean;
   buffer: number;
+  /** 取ったたまごの番号(stage.eggs の何番目か)。取った順 */
+  eggs: number[];
   status: Status;
 }
 
@@ -65,12 +81,43 @@ export interface Input {
 }
 
 export function newGame(stage: StageDef): GameState {
-  return { stage, frame: 0, y: 0, vy: 0, grounded: true, buffer: 0, status: 'running' };
+  return { stage, frame: 0, y: 0, vy: 0, grounded: true, buffer: 0, eggs: [], status: 'running' };
 }
 
 /** 恐竜の位置(スタートからの距離)。経過フレームから決まるので、誤差がたまらない */
 export function distanceAt(stage: StageDef, frame: number): number {
   return frame * stage.speed * DT;
+}
+
+/** 進み具合(0〜100 の整数)。ゴールしたら 100、それまでは最大 99 */
+export function progressPercent(s: GameState): number {
+  if (s.status === 'cleared') return 100;
+  return Math.min(99, Math.floor((distanceAt(s.stage, s.frame) / s.stage.length) * 100));
+}
+
+/** 「ぎりぎり」と呼ぶ、障害物の上のすきま(px)。これより小さいすきまで越えたら、ぎりぎり */
+export const NEAR_MISS_PX = 10;
+
+/**
+ * 障害物を越えたとき、すきまがせまかったか調べる(演出用)。minClear は、いま重なっている障害物ごとの「いちばん近づいたときのすきま」で、
+ * この関数が書き換える(呼ぶ側が持ち続ける)。ぎりぎりで越えた障害物の番号を返す。
+ */
+export function trackNearMiss(minClear: Map<number, number>, s: GameState): number[] {
+  const dx = distanceAt(s.stage, s.frame);
+  const passed: number[] = [];
+  s.stage.obstacles.forEach((o, i) => {
+    if (o.x > dx + DINO_W + 4) return;
+    if (dx >= o.x + o.w) {
+      const gap = minClear.get(i);
+      if (gap !== undefined) {
+        minClear.delete(i);
+        if (gap >= 0 && gap < NEAR_MISS_PX) passed.push(i);
+      }
+    } else if (dx + DINO_W > o.x) {
+      minClear.set(i, Math.min(minClear.get(i) ?? Infinity, s.y - o.h));
+    }
+  });
+  return passed;
 }
 
 /** ゴールに着くフレーム数 */
@@ -84,6 +131,12 @@ export function hits(obstacles: readonly Obstacle[], dx: number, y: number, marg
     if (dx + DINO_W > o.x - margin && dx < o.x + o.w + margin && y < o.h + margin) return true;
   }
   return false;
+}
+
+/** 恐竜(左端 dx・高さ y)が、たまごを取れる位置か。shrink を正にすると取る範囲がせまくなる(テストで余裕を測るため) */
+export function touchesEgg(egg: Egg, dx: number, y: number, shrink = 0): boolean {
+  const pad = EGG_PICKUP - shrink;
+  return dx + DINO_W > egg.x - pad && dx < egg.x + EGG_W + pad && y + DINO_H > egg.y - pad && y < egg.y + EGG_H + pad;
 }
 
 /** 空中の動き 1 ステップ(縦方向だけ) */
@@ -131,5 +184,10 @@ export function step(s: GameState, input: Input): GameState {
   let status: Status = 'running';
   if (hits(s.stage.obstacles, dx, y)) status = 'dead';
   else if (dx >= s.stage.length) status = 'cleared';
-  return { stage: s.stage, frame, y, vy, grounded, buffer, status };
+  let eggs = s.eggs;
+  if (status !== 'dead') {
+    const got = s.stage.eggs.flatMap((egg, i) => (!eggs.includes(i) && touchesEgg(egg, dx, y) ? [i] : []));
+    if (got.length > 0) eggs = [...eggs, ...got];
+  }
+  return { stage: s.stage, frame, y, vy, grounded, buffer, eggs, status };
 }

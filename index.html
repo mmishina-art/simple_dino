@@ -71,10 +71,14 @@
       <section id="screen-game" class="game" hidden>
         <div class="hud">
           <button id="game-back" type="button" aria-label="ステージ選択にもどる">もどる</button>
-          <span id="game-title" class="hud-title"></span>
+          <div class="hud-main">
+            <span id="game-title" class="hud-title"></span>
+            <span id="game-best" class="hud-best muted"></span>
+          </div>
+          <span class="egg-counter"><span aria-hidden="true">🥚</span><span class="sr-only">たまご</span> <span id="egg-count">0/0</span></span>
           <button id="music-button-game" type="button" class="icon-button hud-music" aria-label="BGM" aria-pressed="true">🎵</button>
         </div>
-        <div class="progress" aria-hidden="true"><div id="progress-bar" class="progress-bar"></div></div>
+        <div class="progress" aria-hidden="true"><div id="progress-bar" class="progress-bar"></div><div id="best-marker" class="best-marker" hidden></div></div>
         <div class="stage-wrap">
           <canvas id="game-canvas" class="game-canvas" role="img" aria-label="ゲーム画面。走る恐竜が、サボテンや岩をジャンプでよけます"></canvas>
           <p id="game-hint" class="game-hint">タップでスタート</p>

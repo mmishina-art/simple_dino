@@ -42,7 +42,12 @@ test('ステージを選んで、タップでスタートし、ぶつかると�
   await page.locator('#game-canvas').tap();
   await expect(page.locator('#game-hint')).toBeHidden();
   await expect(page.locator('#overlay-title')).toHaveText('ざんねん!', { timeout: 10_000 });
-  await expect(page.locator('#game-status')).toHaveText('ゲームオーバー');
+  await expect(page.locator('#game-status')).toContainText('ゲームオーバー');
+  // 失敗したときに、どこまで進んだかと、ベストが出る(はじめては、ベスト更新)
+  await expect(page.locator('#overlay-text')).toContainText(/\d+% まで進んだ/);
+  await expect(page.locator('#overlay-text')).toContainText('ベスト更新!');
+  await expect(page.locator('#overlay-text')).toContainText('たまご 0/3');
+  await expect(page.locator('#best-marker')).toBeVisible();
 
   // もういちど: すぐに同じステージを走り出す(進み具合が 0 に戻って、また進む)
   await page.getByRole('button', { name: 'もういちど' }).click();
@@ -65,7 +70,8 @@ test('ジャンプすると効果音が鳴る', async ({ page }) => {
 
 /** 偽の時計で 1 フレームずつ進め、ソルバーが見つけた押し方どおりにジャンプして、結果の画面が出るまで進める */
 async function playWithPlan(page: Page, stageIndex: number, margin: number): Promise<void> {
-  const plan = findPlan(STAGES[stageIndex], margin);
+  // たまごを全部取る経路(取る範囲を 2px せまくしても取れる)で、1 回でたまご全部 = ★3 になる
+  const plan = findPlan(STAGES[stageIndex], margin, 2);
   expect(plan).not.toBeNull();
   // 時計を止める(止めないと、実時間でも進んでしまう)。ここからは runFor で進めた分だけ時間が進む
   await page.clock.pauseAt(10_000);
@@ -88,7 +94,7 @@ async function playWithPlan(page: Page, stageIndex: number, margin: number): Pro
 test('最初はステージ 1 だけ遊べて、ほかはロックされている', async ({ page }) => {
   await page.goto('/');
   await toSelect(page);
-  await expect(page.locator('#progress-summary')).toHaveText('クリア 0/10');
+  await expect(page.locator('#progress-summary')).toContainText('クリア 0/10');
   await expect(page.getByRole('button', { name: 'ステージ1 そうげん' })).toBeEnabled();
   const locked = page.getByRole('button', { name: /ステージ2 さばく.*ロック中/ });
   await expect(locked).toBeDisabled();
@@ -103,19 +109,22 @@ test('ステージ 1 をクリアすると、クリア画面が出て、つぎ�
   await playWithPlan(page, 0, 15);
   await expect(page.locator('#overlay-title')).toHaveText('ステージクリア!');
   await expect(page.locator('#overlay-text')).toContainText('1回目の挑戦でクリア');
-  await expect(page.locator('#game-status')).toHaveText('ステージクリア');
+  await expect(page.locator('#overlay-text')).toContainText('★★★');
+  await expect(page.locator('#overlay-text')).toContainText('たまご 3/3');
+  await expect(page.locator('#game-status')).toContainText('ステージクリア。ほし3つ');
   await page.getByRole('button', { name: 'つぎのステージ' }).click();
   await expect(page.locator('#game-title')).toHaveText('ステージ2 さばく');
   await expect(page.locator('#game-overlay')).toBeHidden();
 
   // もどると、ステージ 2 が解放されている。再読み込みしても残る
   await page.getByRole('button', { name: 'ステージ選択にもどる' }).click();
-  await expect(page.locator('#progress-summary')).toHaveText('クリア 1/10');
+  await expect(page.locator('#progress-summary')).toContainText('クリア 1/10');
   await page.clock.resume();
   await page.reload();
   await toSelect(page);
-  await expect(page.locator('#progress-summary')).toHaveText('クリア 1/10');
-  await expect(page.getByRole('button', { name: /ステージ1 そうげん\(クリア済み\)/ })).toBeEnabled();
+  await expect(page.locator('#progress-summary')).toContainText('クリア 1/10');
+  await expect(page.getByRole('button', { name: /ステージ1 そうげん\(クリア済み、ほし3つ\)/ })).toBeEnabled();
+  await expect(page.locator('.stage-button').first()).toContainText('★★★');
   await expect(page.getByRole('button', { name: 'ステージ2 さばく' })).toBeEnabled();
   await expect(page.getByRole('button', { name: /ステージ3 ゆうやけ.*ロック中/ })).toBeDisabled();
 });
@@ -130,7 +139,7 @@ test('最終ステージをクリアすると、エンディングが出る(も�
   await page.clock.install({ time: 0 });
   await page.goto('/');
   await toSelect(page);
-  await expect(page.locator('#progress-summary')).toHaveText('クリア 9/10');
+  await expect(page.locator('#progress-summary')).toContainText('クリア 9/10');
   await page.getByRole('button', { name: 'ステージ10 ラスト' }).click();
   await playWithPlan(page, 9, 8);
   await expect(page.locator('#screen-ending')).toBeVisible();
@@ -138,12 +147,12 @@ test('最終ステージをクリアすると、エンディングが出る(も�
   await expect(page.locator('#ending-stats')).toContainText('1 回、挑戦しました');
 
   await page.getByRole('button', { name: 'ステージ選択へ' }).click();
-  await expect(page.locator('#progress-summary')).toHaveText('★ ぜんぶクリア! (10/10)');
+  await expect(page.locator('#progress-summary')).toContainText('★ ぜんぶクリア! (10/10)');
   await page.clock.resume();
   await page.reload();
   await expect(page.locator('#title-summary')).toHaveText('つづき: ★ ぜんぶクリア!');
   await toSelect(page);
-  await expect(page.locator('#progress-summary')).toHaveText('★ ぜんぶクリア! (10/10)');
+  await expect(page.locator('#progress-summary')).toContainText('★ ぜんぶクリア! (10/10)');
   await page.getByRole('button', { name: /エンディングをもういちど見る/ }).click();
   await expect(page.locator('#screen-ending')).toBeVisible();
 });
@@ -176,7 +185,7 @@ test('壊れた進み具合の記録が入っていても、起動してステ�
   await page.addInitScript((id) => localStorage.setItem(`${id}-progress`, '{"cleared":[1,99,"x"],"attempts":5'), APP_ID);
   await page.goto('/');
   await toSelect(page);
-  await expect(page.locator('#progress-summary')).toHaveText('クリア 0/10');
+  await expect(page.locator('#progress-summary')).toContainText('クリア 0/10');
   await expect(page.getByRole('button', { name: 'ステージ1 そうげん' })).toBeEnabled();
 });
 
@@ -216,6 +225,53 @@ test('BGM のオン/オフは、タイトルで切り替えられ、再読み込
   await expect(button).toHaveAttribute('aria-pressed', 'false');
   await page.reload();
   await expect(page.locator('#music-button')).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('たまごの数が画面に出る。ステージごとにベストの進み具合も覚えていて、再読み込みしても残る', async ({ page }) => {
+  await page.goto('/');
+  await toSelect(page);
+  await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
+  await expect(page.locator('#egg-count')).toHaveText('0/3');
+  await expect(page.locator('#game-best')).toHaveText('');
+  await page.locator('#game-canvas').tap();
+  await expect(page.locator('#overlay-title')).toHaveText('ざんねん!', { timeout: 10_000 });
+  await page.reload();
+  await toSelect(page);
+  await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
+  await expect(page.locator('#game-best')).toHaveText(/ベスト \d+%/);
+  await expect(page.locator('#best-marker')).toBeVisible();
+});
+
+test('版 1 の古い進み具合(たまごや★の項目がない)も読み込めて、そのまま遊べる', async ({ page }) => {
+  await page.addInitScript((id) => {
+    if (!localStorage.getItem(`${id}-progress`)) {
+      localStorage.setItem(`${id}-schema`, '1');
+      localStorage.setItem(`${id}-progress`, JSON.stringify({ cleared: [1, 2], attempts: { '1': 3 }, firstClearTries: { '1': 3 }, endingSeen: false }));
+    }
+  }, APP_ID);
+  await page.goto('/');
+  await toSelect(page);
+  // クリア済みは ★1 として数える
+  await expect(page.locator('#progress-summary')).toContainText('クリア 2/10 ・ ★ 2/30');
+  await expect(page.getByRole('button', { name: /ステージ2 さばく\(クリア済み、ほし1つ\)/ })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'ステージ3 ゆうやけ' })).toBeEnabled();
+  // 版番号が新しくなっている
+  expect(await page.evaluate((id) => localStorage.getItem(`${id}-schema`), APP_ID)).toBe('2');
+});
+
+test('演出: たまごを取ると効果音が鳴る', async ({ page }) => {
+  await page.clock.install({ time: 0 });
+  await page.goto('/');
+  await page.evaluate(() => {
+    (window as unknown as { __sounds: number[] }).__sounds = [];
+    document.addEventListener('app:sound', (e) => (window as unknown as { __sounds: number[] }).__sounds.push((e as CustomEvent).detail.frequency));
+  });
+  await toSelect(page);
+  await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
+  await playWithPlan(page, 0, 15);
+  // たまごを取ったときの高めの音(784)が鳴っている
+  expect(await page.evaluate(() => (window as unknown as { __sounds: number[] }).__sounds)).toContain(784);
+  await expect(page.locator('#egg-count')).toHaveText('3/3');
 });
 
 test('ステージ選択にもどれる', async ({ page }) => {

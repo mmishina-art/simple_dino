@@ -290,6 +290,7 @@ button.link {
 }
 
 .progress {
+  position: relative;
   height: 8px;
   border-radius: 4px;
   background: var(--border);
@@ -491,4 +492,61 @@ button.link {
   .title-logo {
     font-size: 1.9rem;
   }
+}
+
+/* いちばん進んだ場所の印(進み具合の棒の上) */
+.best-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--text);
+}
+
+.hud-best {
+  font-size: 0.85rem;
+}
+
+.egg-counter {
+  margin-left: auto;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.hud-music {
+  margin-left: 0;
+}
+
+/* 結果の文は、改行で行を分けて出す */
+.overlay p {
+  white-space: pre-line;
+}
+
+/* HUD(ゲーム画面の上): 1 行目に、もどる・ステージ名・たまご・BGM。ベストは名前の下 */
+.hud button {
+  white-space: nowrap;
+  padding: 8px 12px;
+}
+
+.hud-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.hud-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.95rem;
+}
+
+.hud-best {
+  min-height: 1.1em;
+}
+
+.egg-counter {
+  margin-left: 0;
 }

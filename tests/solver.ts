@@ -1,6 +1,6 @@
 // テスト用の「解けるか調べる」仕組み。ジャンプの押し方(いつ押して、何フレーム押し続けるか)を総当たりして、
 // 障害物に当たらずゴールできるかを調べる。ゲームと同じ物理(src/game.ts)を使う。
-import { JUMP_V, distanceAt, goalFrame, hits, stepBody, type StageDef } from '../src/logic';
+import { JUMP_V, distanceAt, goalFrame, hits, stepBody, touchesEgg, type StageDef } from '../src/logic';
 
 const MAX_HOLD = 40;
 
@@ -27,45 +27,84 @@ export interface Move {
   hold: number;
 }
 
-/** margin だけ判定を厳しくしても、ゴールできる押し方。できなければ null */
-export function findPlan(stage: StageDef, margin: number): Move[] | null {
+/**
+ * margin だけ判定を厳しくしても、ゴールできる押し方。できなければ null。
+ * eggShrink を渡すと、たまごを全部取る(取る範囲を eggShrink px せまくしても)押し方だけを探す。
+ */
+export function findPlan(stage: StageDef, margin: number, eggShrink?: number): Move[] | null {
   const total = goalFrame(stage);
+  const withEggs = eggShrink !== undefined;
+  const eggs = withEggs ? stage.eggs : [];
+  const shrink = eggShrink ?? 0;
   const safe = (f: number, y: number): boolean => !hits(stage.obstacles, distanceAt(stage, f), y, margin);
-  const reach = new Uint8Array(total + 1);
-  // どこから(from)、何フレーム押して(hold)着地したか。hold が 0 なら、走って進んだだけ
-  const from = new Int32Array(total + 1);
-  const holdOf = new Uint8Array(total + 1);
+
+  // フレームごとに、恐竜が横にかさなっているたまごの番号(なければ -1)。たまごどうしは離れているので、同時に 1 つだけ
+  const eggAt = new Int16Array(total + 1).fill(-1);
+  if (withEggs) {
+    for (let f = 0; f <= total; f++) {
+      const dx = distanceAt(stage, f);
+      eggs.forEach((e, i) => {
+        if (touchesEgg(e, dx, e.y, shrink)) eggAt[f] = i;
+      });
+    }
+  }
+  /** この区間(f から ys の高さで進む)を通ったあとの、「かさなっているたまごを取ったか」。たまごを取りそこねて通りすぎたら -1 */
+  const segment = (f: number, flag: number, ys: readonly number[]): number => {
+    if (!withEggs) return 0;
+    let cur = eggAt[f];
+    let got = flag;
+    for (let k = 1; k <= ys.length && f + k <= total; k++) {
+      const e = eggAt[f + k];
+      if (e !== cur) {
+        if (cur >= 0 && !got) return -1;
+        cur = e;
+        got = 0;
+      }
+      if (e >= 0 && touchesEgg(eggs[e], distanceAt(stage, f + k), ys[k - 1], shrink)) got = 1;
+    }
+    return cur >= 0 ? got : 0;
+  };
+
+  // 状態 = (フレーム, いまかさなっているたまごを取ったか)
+  const idx = (f: number, flag: number): number => f * 2 + flag;
+  const reach = new Uint8Array((total + 1) * 2);
+  const from = new Int32Array((total + 1) * 2);
+  const holdOf = new Uint8Array((total + 1) * 2);
   const plan = (last: number, extra?: Move): Move[] => {
     const moves: Move[] = extra ? [extra] : [];
-    for (let f = last; f > 0; f = from[f]) if (holdOf[f] > 0) moves.push({ frame: from[f], hold: holdOf[f] });
+    for (let i = last; i > 0; i = from[i]) if (holdOf[i] > 0) moves.push({ frame: Math.floor(from[i] / 2), hold: holdOf[i] });
     return moves.reverse();
   };
-  if (safe(0, 0)) reach[0] = 1;
+  const mark = (f: number, flag: number, fromIdx: number, hold: number): void => {
+    const i = idx(f, flag);
+    if (reach[i]) return;
+    reach[i] = 1;
+    from[i] = fromIdx;
+    holdOf[i] = hold;
+  };
+  if (safe(0, 0)) reach[idx(0, 0)] = 1;
   for (let f = 0; f <= total; f++) {
-    if (!reach[f]) continue;
-    if (f === total) return plan(f);
-    if (!reach[f + 1] && safe(f + 1, 0)) {
-      reach[f + 1] = 1;
-      from[f + 1] = f;
-      holdOf[f + 1] = 0;
-    }
-    for (let i = 0; i < TRAJECTORIES.length; i++) {
-      const ys = TRAJECTORIES[i];
-      const end = f + ys.length;
-      if (end > total) {
-        // 着地する前にゴールを越えるなら、そこまでの安全だけ見る
-        let ok = true;
-        for (let k = 1; f + k <= total; k++) if (!safe(f + k, ys[k - 1])) { ok = false; break; }
-        if (ok) return plan(f, { frame: f, hold: i + 1 });
-        continue;
+    for (let flag = 0; flag < 2; flag++) {
+      const here = idx(f, flag);
+      if (!reach[here]) continue;
+      if (f === total) return plan(here);
+      if (safe(f + 1, 0)) {
+        const next = segment(f, flag, [0]);
+        if (next >= 0) mark(f + 1, next, here, 0);
       }
-      if (reach[end]) continue;
-      let ok = true;
-      for (let k = 1; k <= ys.length; k++) if (!safe(f + k, ys[k - 1])) { ok = false; break; }
-      if (ok) {
-        reach[end] = 1;
-        from[end] = f;
-        holdOf[end] = i + 1;
+      for (let i = 0; i < TRAJECTORIES.length; i++) {
+        const ys = TRAJECTORIES[i];
+        const end = f + ys.length;
+        // たまごを数えないときは、着地先にすでに着いていれば、調べなおさない(速くするため)
+        if (!withEggs && end <= total && reach[idx(end, 0)]) continue;
+        let ok = true;
+        for (let k = 1; f + k <= total && k <= ys.length; k++) if (!safe(f + k, ys[k - 1])) { ok = false; break; }
+        if (!ok) continue;
+        const next = segment(f, flag, ys);
+        if (next < 0) continue;
+        // 着地する前にゴールを越えるなら、そこまでの安全だけ見る
+        if (end > total) return plan(here, { frame: f, hold: i + 1 });
+        mark(end, next, here, i + 1);
       }
     }
   }
@@ -73,14 +112,14 @@ export function findPlan(stage: StageDef, margin: number): Move[] | null {
 }
 
 /** margin だけ判定を厳しくしても、ゴールできるか */
-export function canClear(stage: StageDef, margin: number): boolean {
-  return findPlan(stage, margin) !== null;
+export function canClear(stage: StageDef, margin: number, eggShrink?: number): boolean {
+  return findPlan(stage, margin, eggShrink) !== null;
 }
 
 /** 判定を何 px 厳しくしても解けるか(大きいほど、ゆとりがあって易しい)。0 でも解けなければ -1 */
-export function maxMargin(stage: StageDef, limit = 40): number {
-  if (!canClear(stage, 0)) return -1;
+export function maxMargin(stage: StageDef, limit = 40, eggShrink?: number): number {
+  if (!canClear(stage, 0, eggShrink)) return -1;
   let m = 0;
-  while (m < limit && canClear(stage, m + 1)) m++;
+  while (m < limit && canClear(stage, m + 1, eggShrink)) m++;
   return m;
 }

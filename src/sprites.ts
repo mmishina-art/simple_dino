@@ -73,6 +73,18 @@ function pillar(w: number, h: number): Sprite {
   return rows;
 }
 
+/** たまご: k はふち、# は黄身いろ、o はつや。大きさは当たり判定(EGG_W × EGG_H)と同じ */
+export const EGG: Sprite = [
+  '..kkk..',
+  '.k###k.',
+  'k#o###k',
+  'k#o###k',
+  'k#####k',
+  'k#####k',
+  '.k###k.',
+  '..kkk..',
+];
+
 export const SPRITES = {
   S: cactus(7, 13, { top: 3, join: 6 }, { top: 4, join: 7 }),
   B: cactus(9, 22, { top: 6, join: 12 }, { top: 3, join: 9 }),
