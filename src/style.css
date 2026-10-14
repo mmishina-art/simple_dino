@@ -13,6 +13,7 @@
   --border: #d9cfae;
   --primary: #3f7d3a;
   --primary-text: #ffffff;
+  --boost: #d9643a;
 }
 
 * {
@@ -545,6 +546,9 @@ button.link {
 
 .hud-best {
   min-height: 1.1em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .egg-counter {
@@ -552,19 +556,44 @@ button.link {
 }
 
 /* エンドレスモード: ゴールも、たまごもない。かわりに、走った距離(スコア)を出す */
-.score {
+.score-row {
   display: none;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 1.6em;
+}
+
+.game.endless .score-row {
+  display: flex;
+}
+
+.score {
+  font-size: 1.25rem;
   font-weight: 700;
   white-space: nowrap;
+  margin-left: auto;
 }
 
-.game.endless .score {
-  display: inline;
-}
-
-.game.endless .progress,
 .game.endless .egg-counter {
   display: none;
+}
+
+/* エンドレスでは、進み具合の棒を、肉の効き目の残りに使う */
+.game.endless .progress-bar {
+  background: var(--boost);
+}
+
+.boost-label {
+  display: none;
+  font-size: 1.1rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--boost);
+}
+
+.game.endless.boosted .boost-label {
+  display: inline;
 }
 
 .endless-button {

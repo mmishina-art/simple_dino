@@ -85,6 +85,18 @@ export const EGG: Sprite = [
   '..kkk..',
 ];
 
+/** 骨つきの肉: k はふち、# は肉、o はつやと骨。大きさは当たり判定(MEAT_W × MEAT_H)と同じ */
+export const MEAT: Sprite = [
+  '..kkkk...',
+  '.k####k..',
+  'k#oo###k.',
+  'k######k.',
+  '.k####kk.',
+  '..kkkoook',
+  '.....kook',
+  '......kk.',
+];
+
 export const SPRITES = {
   S: cactus(7, 13, { top: 3, join: 6 }, { top: 4, join: 7 }),
   B: cactus(9, 22, { top: 6, join: 12 }, { top: 3, join: 9 }),

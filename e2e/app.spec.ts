@@ -282,24 +282,25 @@ test('エンドレス: ステージ選択から始められ、ぶつかると走
   await expect(page.locator('#endless-best')).toHaveText('ハイスコアなし');
   await page.getByRole('button', { name: /エンドレス/ }).click();
   await expect(page.locator('#game-title')).toHaveText('エンドレス');
-  await expect(page.locator('#score')).toHaveText('0 m');
-  // ゴールのあるステージ用の表示(進み具合の棒・たまご)は出ない
-  await expect(page.locator('.progress')).toBeHidden();
+  await expect(page.locator('#score')).toHaveText('0 点');
+  // ゴールのあるステージ用のたまごの表示は出ない。肉のレベルの表示は、肉を取るまで出ない
   await expect(page.locator('.egg-counter')).toBeHidden();
+  await expect(page.locator('#boost')).toBeHidden();
   await page.locator('#game-canvas').tap();
   await expect(page.locator('#overlay-title')).toHaveText('ざんねん!', { timeout: 10_000 });
-  await expect(page.locator('#overlay-text')).toContainText(/\d+ m 走った/);
+  await expect(page.locator('#overlay-text')).toContainText(/\d+ 点/);
+  await expect(page.locator('#overlay-text')).toContainText(/\d+ m 走った・肉 0個/);
   await expect(page.locator('#overlay-text')).toContainText('ハイスコア更新!');
   // もういちど: すぐに新しいコースで走り出す
   await page.getByRole('button', { name: 'もういちど' }).click();
   await expect(page.locator('#game-overlay')).toBeHidden();
   await expect(page.locator('#overlay-title')).toHaveText('ざんねん!', { timeout: 10_000 });
   await page.getByRole('button', { name: 'ステージ選択', exact: true }).click();
-  await expect(page.locator('#endless-best')).toHaveText(/ハイスコア \d+ m/);
+  await expect(page.locator('#endless-best')).toHaveText(/ハイスコア \d+ 点/);
   // 再読み込みしても残る。ふつうのステージを開くと、棒とたまごの表示がもどる
   await page.reload();
   await toSelect(page);
-  await expect(page.locator('#endless-best')).toHaveText(/ハイスコア \d+ m/);
+  await expect(page.locator('#endless-best')).toHaveText(/ハイスコア \d+ 点/);
   await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
   await expect(page.locator('.progress')).toBeVisible();
   await expect(page.locator('#score')).toBeHidden();
@@ -316,7 +317,7 @@ test('エンドレス: 専用の曲が鳴る', async ({ page }) => {
   await expect.poll(() => page.evaluate(() => (window as unknown as { __songs: string[] }).__songs)).toContain('endless');
 });
 
-test('エンドレス: ソルバーの押し方で走りつづけると、スコアが増え、背景が変わっても止まらない', async ({ page }) => {
+test('エンドレス: ソルバーの押し方で、最初の肉の手前まで走りつづけると、スコアが増える', async ({ page }) => {
   test.setTimeout(120_000);
   // コースの種を固定する(乱数を 0.5 に固定すると、種は 2^30)
   await page.addInitScript(() => { Math.random = () => 0.5; });
@@ -337,8 +338,9 @@ test('エンドレス: ソルバーの押し方で走りつづけると、スコ
   await page.locator('#game-canvas').tap();
   await page.mouse.move(200, 600);
   const FRAME_MS = 1000 / 60;
-  // 約 750 m(背景が 3 回変わる)まで走る
-  for (let f = 0; f < 1100; f++) {
+  // 最初の肉(x=2702px)の手前まで走る。肉を取ると速さが変わって、肉なしで作った押し方がずれるので、そこまで
+  // (肉で速くなっても越えられることは、tests/endless.test.ts が、ソルバーで確かめている)
+  for (let f = 0; f < 700; f++) {
     if (await page.locator('#game-overlay').isVisible()) break;
     for (const m of plan ?? []) {
       if (m.frame === f) await page.mouse.down();
@@ -347,8 +349,66 @@ test('エンドレス: ソルバーの押し方で走りつづけると、スコ
     await page.clock.runFor(Math.round((f + 1) * FRAME_MS) - Math.round(f * FRAME_MS));
   }
   await expect(page.locator('#game-overlay')).toBeHidden();
-  const meters = Number((await page.locator('#score').textContent())?.replace(' m', ''));
-  expect(meters).toBeGreaterThan(400);
+  const points = Number((await page.locator('#score').textContent())?.replace(' 点', ''));
+  expect(points).toBeGreaterThan(200);
+});
+
+test('エンドレス: 肉を取ると、レベルと倍率が出て、スコアのふえ方が大きくなり、効き目の棒がへっていく', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.addInitScript(() => { Math.random = () => 0.5; });
+  const seed = Math.floor(0.5 * 2 ** 31);
+  const course = createEndless(seed);
+  course.extend?.(9000);
+  const meat = course.meats![0];
+  // 最初の肉を、かならず取る(たまごとして扱う)経路を、ソルバーで探す
+  const obstacles = course.obstacles.filter((o) => o.x < meat.x + 1500);
+  const last = obstacles[obstacles.length - 1];
+  const fixed: StageDef = { ...course, obstacles, length: last.x + last.w + 1000, eggs: [{ x: meat.x, y: meat.y }], extend: undefined };
+  const plan = findPlan(fixed, 4, 2);
+  expect(plan).not.toBeNull();
+
+  // 肉でテンポが変わる BGM を含めて、ページにエラーが出ないこと
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.clock.install({ time: 0 });
+  await page.goto('/');
+  await page.evaluate(() => {
+    (window as unknown as { __sounds: number[] }).__sounds = [];
+    document.addEventListener('app:sound', (e) => (window as unknown as { __sounds: number[] }).__sounds.push((e as CustomEvent).detail.frequency));
+  });
+  await toSelect(page);
+  await page.getByRole('button', { name: /エンドレス/ }).click();
+  await page.clock.pauseAt(10_000);
+  await page.locator('#game-canvas').tap();
+  await page.mouse.move(200, 600);
+  const FRAME_MS = 1000 / 60;
+  let f = 0;
+  for (; f < 2500; f++) {
+    if (await page.locator('#boost').isVisible()) break;
+    for (const m of plan ?? []) {
+      if (m.frame === f) await page.mouse.down();
+      if (m.frame + m.hold === f) await page.mouse.up();
+    }
+    await page.clock.runFor(Math.round((f + 1) * FRAME_MS) - Math.round(f * FRAME_MS));
+  }
+  await expect(page.locator('#game-overlay')).toBeHidden();
+  await expect(page.locator('#boost')).toHaveText('🍖1 ×1.5');
+  await expect(page.locator('#screen-game')).toHaveClass(/boosted/);
+  // 取ったときの効果音(392Hz から始まる上がる音)が鳴っている
+  expect(await page.evaluate(() => (window as unknown as { __sounds: number[] }).__sounds)).toContain(392);
+  // 効き目の棒は、ほぼ満タンから、へっていく
+  const width = async () => Number((await page.locator('#progress-bar').evaluate((e) => (e as HTMLElement).style.width)).replace('%', ''));
+  const full = await width();
+  expect(full).toBeGreaterThan(80);
+  for (let i = 0; i < 120; i++) {
+    for (const m of plan ?? []) {
+      if (m.frame === f + i) await page.mouse.down();
+      if (m.frame + m.hold === f + i) await page.mouse.up();
+    }
+    await page.clock.runFor(Math.round((f + i + 1) * FRAME_MS) - Math.round((f + i) * FRAME_MS));
+  }
+  expect(await width()).toBeLessThan(full);
+  expect(errors).toEqual([]);
 });
 
 test('ステージ選択にもどれる', async ({ page }) => {

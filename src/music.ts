@@ -13,6 +13,8 @@ let desired: SongId | null = null;
 
 interface Running {
   id: SongId;
+  /** 1 ステップ(16 分音符)の、もとの秒数。いまの秒数は stepSec(テンポの倍率で割った値) */
+  baseStep: number;
   song: Song;
   /** 全体の音量(ここから出力へ) */
   bus: GainNode;
@@ -28,6 +30,8 @@ interface Running {
 }
 let running: Running | undefined;
 let noise: AudioBuffer | undefined;
+/** テンポの倍率(1 = 曲のとおり)。肉のレベルが高いと、少し速くなる */
+let tempo = 1;
 
 /** 先読みする長さ(秒)と、確認の間隔(ミリ秒) */
 const LOOKAHEAD = 0.2;
@@ -51,10 +55,22 @@ export function setMusicOn(on: boolean, persist = true): void {
 }
 
 /** いまの場面の曲を伝える。restart が true なら、同じ曲でも頭から。delay は鳴らし始めるまでの秒数 */
+/** テンポを、曲の何倍にするか変える。いま鳴っている曲も、リズムをとぎらせずに、すぐ変わる */
+export function setMusicTempo(factor: number): void {
+  tempo = factor;
+  const r = running;
+  if (!r) return;
+  // 次に鳴らす音の時刻は、そのままにして、そこから先のテンポだけ変える
+  const nextTime = r.t0 + r.next * r.stepSec;
+  r.stepSec = r.baseStep / factor;
+  r.t0 = nextTime - r.next * r.stepSec;
+}
+
 export function setScene(id: SongId | null, opts: { restart?: boolean; delay?: number } = {}): void {
   const same = desired === id && running?.id === id;
   desired = id;
   if (same && !opts.restart) return;
+  tempo = 1;
   stopRunning();
   startDesired(opts.delay ?? 0);
 }
@@ -94,7 +110,9 @@ function startDesired(delay = 0): void {
   tones.frequency.value = SOFTEN_HZ;
   tones.Q.value = 0.5;
   tones.connect(bus);
-  const r: Running = { id: song.id, song, bus, tones, byStep, steps: songSteps(song), stepSec: stepSeconds(song), t0: ctx.currentTime + 0.06 + delay, next: 0, timer: 0 };
+  const r: Running = { id: song.id, baseStep: 0, song, bus, tones, byStep, steps: songSteps(song), stepSec: stepSeconds(song), t0: ctx.currentTime + 0.06 + delay, next: 0, timer: 0 };
+  r.baseStep = r.stepSec;
+  r.stepSec = r.baseStep / tempo;
   r.timer = window.setInterval(() => tick(ctx, r), TICK_MS);
   running = r;
   tick(ctx, r);

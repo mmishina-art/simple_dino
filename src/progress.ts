@@ -16,7 +16,7 @@ export interface Progress {
   eggs: Record<string, number[]>;
   /** 1 回のクリアで、たまごを全部取った(★3つ)ステージの番号 */
   perfect: number[];
-  /** エンドレスモードの、ハイスコア(走った距離。m)と、遊んだ回数 */
+  /** エンドレスモードの、ハイスコア(点。肉の倍率が入る)と、遊んだ回数。版 3 まではメートルだったが、倍率なしなら同じ値 */
   endlessBest: number;
   endlessRuns: number;
 }
@@ -105,9 +105,9 @@ export function starsOf(p: Progress, id: number, eggTotal: number): number {
 
 export const totalStars = (p: Progress, eggTotals: readonly number[]): number => eggTotals.reduce((sum, total, i) => sum + starsOf(p, i + 1, total), 0);
 
-/** エンドレスを 1 回遊んだ結果(meters は走った距離)。ハイスコアなら記録する。newBest は、ハイスコアを更新したか */
-export function recordEndless(p: Progress, meters: number): { progress: Progress; newBest: boolean } {
-  const m = Math.max(0, Math.min(999_999, Math.floor(meters)));
+/** エンドレスを 1 回遊んだ結果(score はスコア。点)。ハイスコアなら記録する。newBest は、ハイスコアを更新したか */
+export function recordEndless(p: Progress, score: number): { progress: Progress; newBest: boolean } {
+  const m = Math.max(0, Math.min(999_999, Math.floor(score)));
   const newBest = m > p.endlessBest;
   return { progress: { ...p, endlessRuns: p.endlessRuns + 1, endlessBest: newBest ? m : p.endlessBest }, newBest };
 }

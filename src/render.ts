@@ -1,9 +1,9 @@
 // Canvas への描画。ゲームの状態(GameState)を絵にするだけで、ルールには触れない。
 // 座標は論理 px(横 VIEW_W × 縦 VIEW_H)。実際の画面の大きさに合わせて、scale 倍で描く。
 // ドット絵がにじまないよう、四角は端末の px にそろえて塗る。
-import { DINO_W, EGG_H, EGG_W, type GameState, type ObstacleKind } from './logic';
+import { DINO_W, EGG_H, EGG_W, MEAT_H, MEAT_W, type GameState, type ObstacleKind } from './logic';
 import type { Particle, Popup } from './fx';
-import { DINO, EGG, SPRITES, squashed, type Sprite } from './sprites';
+import { DINO, EGG, MEAT, SPRITES, squashed, type Sprite } from './sprites';
 import { THEMES, type Theme } from './themes';
 
 export const VIEW_W = 400;
@@ -42,6 +42,12 @@ function sprite(p: Pen, sp: Sprite, x: number, y: number, main: string, accent =
       else if (ch === 'k') rect(p, x + k * CELL, y + r * CELL, CELL, CELL, edge);
     }
   }
+}
+
+/** 色の明るさ(0 暗い 〜 1 明るい) */
+function luma(hex: string): number {
+  const n = (i: number): number => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+  return (0.299 * n(0) + 0.587 * n(1) + 0.114 * n(2)) / 255;
 }
 
 function mix(a: string, b: string, t: number): string {
@@ -183,8 +189,12 @@ export interface DrawOptions {
   popups?: readonly Popup[];
   /** 画面のゆれ(論理 px) */
   shake?: { x: number; y: number };
+  /** 肉のレベル(0 なら何も出さない)。速いほど、速さの線が多く長くなる */
+  speedLines?: number;
 }
 
+const MEAT_COLOR = '#c8553d';
+const MEAT_BONE = '#ffe3bd';
 const EGG_GOLD = '#f4b942';
 const EGG_SHINE = '#fff1a8';
 
@@ -221,6 +231,22 @@ export function drawScene(c: CanvasRenderingContext2D, width: number, state: Gam
     sprite(p, EGG, x, GROUND_Y - egg.y - EGG_H + bob, EGG_GOLD, EGG_SHINE, theme.dino);
   });
 
+  // 肉(まだ取っていないものだけ。たまごと同じように、ゆらゆら上下する)
+  stage.meats?.forEach((meat, i) => {
+    const x = DINO_SCREEN_X + (meat.x - d);
+    if (x > VIEW_W) return;
+    if (x + MEAT_W < -4 || state.meats.includes(i)) return;
+    const bob = Math.round(Math.sin(state.frame / 7 + i) * 2);
+    const top = GROUND_Y - meat.y - MEAT_H + bob;
+    sprite(p, MEAT, x, top, MEAT_COLOR, MEAT_BONE, theme.dino);
+    // ほんのり光る点(見つけやすいように、順番にまたたく)
+    const twinkle = Math.floor(state.frame / 10 + i) % 3;
+    const spark = luma(theme.skyTop) > 0.5 ? MEAT_COLOR : '#ffe3bd';
+    if (twinkle === 0) rect(p, x - 5, top + 2, 3, 3, spark);
+    else if (twinkle === 1) rect(p, x + MEAT_W + 2, top - 2, 3, 3, spark);
+    else rect(p, x + 8, top - 6, 3, 3, spark);
+  });
+
   // 恐竜(当たり判定は絵より少し小さく、絵の中央にある)
   let dino: Sprite = DINO.stand;
   if (state.status === 'dead') dino = DINO.dead;
@@ -228,6 +254,19 @@ export function drawScene(c: CanvasRenderingContext2D, width: number, state: Gam
   const drawn = opts.squash && state.grounded && state.status === 'running' ? squashed(dino) : dino;
   const x = DINO_SCREEN_X - (dino[0].length * CELL - DINO_W) / 2;
   sprite(p, drawn, x, GROUND_Y - state.y - drawn.length * CELL, theme.dino);
+
+  // 速さの線(肉のレベルが高いほど、多く、長く、速く流れる)
+  const level = opts.speedLines ?? 0;
+  if (level > 0) {
+    c.globalAlpha = 0.5;
+    for (let i = 0; i < 3 + level * 2; i++) {
+      const len = 24 + level * 12;
+      const x = VIEW_W + 40 - ((i * 131 + state.frame * (14 + level * 6)) % (VIEW_W + 80));
+      // 明るい空では、白い線は見えないので、地面の線の色を使う
+      rect(p, x, 20 + ((i * 47) % (GROUND_Y - 70)), len, 2, luma(theme.skyTop) > 0.5 ? theme.groundLine : '#ffffff');
+    }
+    c.globalAlpha = 1;
+  }
 
   // 演出: 土ぼこり・キラキラ・紙ふぶき
   for (const part of opts.particles ?? []) {

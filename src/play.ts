@@ -2,7 +2,7 @@
 // 画面のリフレッシュレートが違っても(60Hz / 120Hz)、ゲームの速さは変わらない。
 // 演出(土ぼこり・キラキラ・画面のゆれ・紙ふぶき)は、見た目だけ。動きを減らす設定のときは出さない。
 import {
-  DT, DINO_H, DINO_W, newGame, progressPercent, step, trackNearMiss, type GameState, type StageDef,
+  BOOST_FRAMES, DT, DINO_H, DINO_W, newGame, progressPercent, scoreMultiplier, step, trackNearMiss, type GameState, type StageDef,
 } from './logic';
 import {
   advanceParticles, advancePopups, confetti, crash, dust, shakeOffset, sparkle, type Particle, type Popup,
@@ -13,6 +13,21 @@ import { themeOf } from './themes';
 
 export type Phase = 'ready' | 'playing' | 'paused' | 'dead' | 'cleared';
 
+/** プレイ中の状況(画面の表示に使う) */
+export interface RunInfo {
+  /** 0〜1 の進み具合(エンドレスは常に 0) */
+  ratio: number;
+  /** 走った距離(m) */
+  meters: number;
+  /** スコア(点) */
+  score: number;
+  /** 肉のレベルと、効き目の残り(0〜1) */
+  boost: number;
+  boostRatio: number;
+  /** スコアの倍率 */
+  mult: number;
+}
+
 export interface PlayHandlers {
   onJump(): void;
   onLand(): void;
@@ -21,11 +36,12 @@ export interface PlayHandlers {
   /** 障害物をぎりぎりで越えた */
   onNearMiss(): void;
   /** やられた(少し間をおいて呼ばれる)。percent は進んだ場所(0〜99 %)、eggs はこの回に取ったたまごの数 */
-  onDead(result: { percent: number; eggs: number; meters: number }): void;
+  onDead(result: { percent: number; eggs: number; meters: number; score: number; meats: number; topBoost: number }): void;
   /** ゴールした(少し間をおいて呼ばれる)。eggs はこの回に取ったたまごの番号 */
   onCleared(result: { eggs: number[] }): void;
-  /** ratio は 0〜1 の進み具合(エンドレスは常に 0)、meters は走った距離(m) */
-  onProgress(ratio: number, meters: number): void;
+  /** 肉を取った。level は取ったあとのレベル */
+  onMeat(level: number): void;
+  onProgress(info: RunInfo): void;
 }
 
 /** やられた・ゴールしたあと、結果を出すまでの間(フレーム数) */
@@ -82,7 +98,7 @@ export class Player {
     this.popups = [];
     this.shakeLeft = 0;
     this.minClear.clear();
-    this.handlers.onProgress(0, 0);
+    this.report();
     this.handlers.onEgg(0, stage.eggs.length);
     this.draw();
   }
@@ -149,8 +165,7 @@ export class Player {
       this.acc -= DT;
       this.onStep(prev, this.state);
     }
-    const { dist, stage } = this.state;
-    this.handlers.onProgress(stage.endless ? 0 : Math.min(1, dist / stage.length), meters(dist));
+    this.report();
     if (this.state.status !== 'running') {
       this.phase = this.state.status;
       this.endedFrames = 0;
@@ -173,6 +188,11 @@ export class Player {
     }
     // 走っている間の、小さな土ぼこり
     if (s.grounded && s.frame % 8 === 0) this.spawn(dust(feet.x - 8, feet.y, 1, theme.groundLine, Math.random));
+    // 肉
+    if (s.meats.length > prev.meats.length) {
+      this.spawn(sparkle(DINO_SCREEN_X + DINO_W / 2, GROUND_Y - s.y - DINO_H / 2, 12, '#e8704a', Math.random, 120));
+      this.handlers.onMeat(s.boost);
+    }
     // たまご
     if (s.eggs.length > prev.eggs.length) {
       this.spawn(sparkle(DINO_SCREEN_X + DINO_W / 2, GROUND_Y - s.y - DINO_H / 2, 10, '#f4b942', Math.random, 110));
@@ -202,7 +222,10 @@ export class Player {
   private settle(): void {
     this.endedFrames += 1;
     if (this.endedFrames !== RESULT_DELAY) return;
-    if (this.phase === 'dead') this.handlers.onDead({ percent: progressPercent(this.state), eggs: this.state.eggs.length, meters: meters(this.state.dist) });
+    if (this.phase === 'dead') this.handlers.onDead({
+        percent: progressPercent(this.state), eggs: this.state.eggs.length, meters: meters(this.state.dist),
+        score: Math.floor(this.state.score), meats: this.state.meats.length, topBoost: this.state.topBoost,
+      });
     else this.handlers.onCleared({ eggs: [...this.state.eggs] });
   }
 
@@ -213,6 +236,19 @@ export class Player {
     if (this.shakeLeft > 0) this.shakeLeft -= 1;
     // ゴールの紙ふぶきは、結果が出るまで降り続ける
     if (this.phase === 'cleared' && this.endedFrames < RESULT_DELAY + 50) this.spawn(confetti(2, VIEW_W, Math.random));
+  }
+
+  /** 画面の表示のために、いまの状況を知らせる */
+  private report(): void {
+    const s = this.state;
+    this.handlers.onProgress({
+      ratio: s.stage.endless ? 0 : Math.min(1, s.dist / s.stage.length),
+      meters: meters(s.dist),
+      score: Math.floor(s.score),
+      boost: s.boost,
+      boostRatio: s.boost > 0 ? s.boostLeft / BOOST_FRAMES : 0,
+      mult: scoreMultiplier(s.boost),
+    });
   }
 
   private spawn(list: Particle[]): void {
@@ -228,6 +264,7 @@ export class Player {
       particles: this.particles,
       popups: this.popups,
       shake,
+      speedLines: this.reduced ? 0 : s.boost,
     });
   }
 }

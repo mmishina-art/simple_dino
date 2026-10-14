@@ -1,6 +1,7 @@
 import './style.css';
 import { startEnding, startTitle } from './ending';
 import { createEndless } from './endless';
+import { scoreMultiplier } from './logic';
 import { Player } from './play';
 import {
   allCleared, bestOf, isCleared, isUnlocked, markEndingSeen, recordAttempt, recordClear, recordDeath, recordEndless, sanitizeProgress, starsOf, totalAttempts, totalStars, type Progress,
@@ -8,7 +9,7 @@ import {
 import { STAGES } from './stages';
 import { setupInstallGuide } from './install';
 import { setupUpdateBanner } from './pwa';
-import { isMusicOn, setMusicOn, setScene, syncMusic, unlockMusic } from './music';
+import { isMusicOn, setMusicOn, setMusicTempo, setScene, syncMusic, unlockMusic } from './music';
 import { isSoundOn, setSound, sfx, syncSound } from './sound';
 import { stageSongId, type SongId } from './songs';
 import { exportBackup, importBackup, load, migrateStorage, requestPersist, save } from './storage';
@@ -92,7 +93,7 @@ function renderStageList(): void {
   const stars = `★ ${totalStars(progress, STAGES.map((s) => s.eggs.length))}/${STAGES.length * 3}`;
   $('progress-summary').textContent = done ? `★ ぜんぶクリア! (${STAGES.length}/${STAGES.length}) ・ ${stars}` : `クリア ${progress.cleared.length}/${STAGES.length} ・ ${stars}`;
   $('ending-open').hidden = !done;
-  $('endless-best').textContent = progress.endlessBest > 0 ? `ハイスコア ${progress.endlessBest} m` : 'ハイスコアなし';
+  $('endless-best').textContent = progress.endlessBest > 0 ? `ハイスコア ${progress.endlessBest} 点` : 'ハイスコアなし';
   $('title-summary').textContent = progress.cleared.length > 0 ? `つづき: ${done ? '★ ぜんぶクリア!' : `クリア ${progress.cleared.length}/${STAGES.length}`}` : '';
 }
 
@@ -112,6 +113,8 @@ function show(screen: HTMLElement): void {
 
 const status = $('game-status');
 const score = $('score');
+const boostLabel = $('boost');
+let lastBoost = 0;
 let current: StageDef = STAGES[0];
 
 const player = new Player(
@@ -124,16 +127,17 @@ const player = new Player(
       $('egg-count').textContent = `${count}/${total}`;
     },
     onNearMiss: () => sfx('near'),
-    onDead: ({ percent, eggs, meters }) => {
+    onDead: ({ percent, eggs, meters, score: points, meats, topBoost }) => {
       setScene(null);
       sfx('dead');
       if (current.endless) {
-        const { progress: next, newBest } = recordEndless(progress, meters);
+        const { progress: next, newBest } = recordEndless(progress, points);
         updateProgress(next);
         renderBest();
-        const line = newBest ? 'ハイスコア更新!' : `ハイスコア ${progress.endlessBest} m`;
-        status.textContent = `ゲームオーバー。${meters}メートル走りました。${line}`;
-        showOverlay('ざんねん!', `${meters} m 走った\n${line}`, [
+        const line = newBest ? 'ハイスコア更新!' : `ハイスコア ${progress.endlessBest} 点`;
+        const detail = `${meters} m 走った・肉 ${meats}個${topBoost > 0 ? `・最高 ×${scoreMultiplier(topBoost).toFixed(1)}` : ''}`;
+        status.textContent = `ゲームオーバー。${points}点。${detail}。${line}`;
+        showOverlay('ざんねん!', `${points} 点\n${detail}\n${line}`, [
           { label: 'もういちど', primary: true, run: () => restart() },
           { label: 'ステージ選択', run: () => closeStage() },
         ]);
@@ -180,11 +184,24 @@ const player = new Player(
         { label: 'ステージ選択', run: () => closeStage() },
       ]);
     },
-    onProgress: (ratio, meters) => {
-      $('progress-bar').style.setProperty('width', `${Math.round(ratio * 100)}%`);
-      // スコアは、変わったときだけ書きかえる(毎フレームは書かない)
-      const text = `${meters} m`;
-      if (current.endless && score.textContent !== text) score.textContent = text;
+    onMeat: () => sfx('meat'),
+    onProgress: (info) => {
+      if (!current.endless) {
+        $('progress-bar').style.setProperty('width', `${Math.round(info.ratio * 100)}%`);
+        return;
+      }
+      // エンドレス: スコアと、肉のレベル・倍率、効き目の残り(棒)を出す。変わったときだけ書きかえる(毎フレームは書かない)
+      const text = `${info.score} 点`;
+      if (score.textContent !== text) score.textContent = text;
+      const label = info.boost > 0 ? `🍖${info.boost} ×${info.mult.toFixed(1)}` : '';
+      if (boostLabel.textContent !== label) boostLabel.textContent = label;
+      $('progress-bar').style.setProperty('width', `${Math.round(info.boostRatio * 100)}%`);
+      game.classList.toggle('boosted', info.boost > 0);
+      if (info.boost !== lastBoost) {
+        lastBoost = info.boost;
+        // 肉のレベルが高いほど、曲も少し速くなる
+        setMusicTempo(1 + 0.05 * info.boost);
+      }
     },
   },
   current,
@@ -245,7 +262,7 @@ function openEndless(): void {
   show(game);
   game.classList.add('endless');
   $('game-title').textContent = 'エンドレス';
-  $('score').textContent = '0 m';
+  $('score').textContent = '0 点';
   renderBest();
   hideOverlay();
   hint.hidden = false;
@@ -258,7 +275,7 @@ function openEndless(): void {
 function renderBest(): void {
   if (current.endless) {
     $('best-marker').hidden = true;
-    $('game-best').textContent = progress.endlessBest > 0 ? `ハイスコア ${progress.endlessBest} m` : '';
+    $('game-best').textContent = progress.endlessBest > 0 ? `ハイスコア ${progress.endlessBest} 点` : '';
     return;
   }
   const best = bestOf(progress, current.id);
