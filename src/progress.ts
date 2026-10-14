@@ -16,10 +16,13 @@ export interface Progress {
   eggs: Record<string, number[]>;
   /** 1 回のクリアで、たまごを全部取った(★3つ)ステージの番号 */
   perfect: number[];
+  /** エンドレスモードの、ハイスコア(走った距離。m)と、遊んだ回数 */
+  endlessBest: number;
+  endlessRuns: number;
 }
 
 export function emptyProgress(): Progress {
-  return { cleared: [], attempts: {}, firstClearTries: {}, endingSeen: false, bestPercent: {}, eggs: {}, perfect: [] };
+  return { cleared: [], attempts: {}, firstClearTries: {}, endingSeen: false, bestPercent: {}, eggs: {}, perfect: [], endlessBest: 0, endlessRuns: 0 };
 }
 
 const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < 1_000_000;
@@ -47,6 +50,9 @@ export function sanitizeProgress(raw: unknown, stageCount: number): Progress {
     }
   }
   if (Array.isArray(r.perfect)) p.perfect = [...new Set(r.perfect.filter(validId))].sort((a, b) => a - b);
+  // 版 3 で足した項目
+  if (isCount(r.endlessBest)) p.endlessBest = r.endlessBest;
+  if (isCount(r.endlessRuns)) p.endlessRuns = r.endlessRuns;
   return p;
 }
 
@@ -98,6 +104,13 @@ export function starsOf(p: Progress, id: number, eggTotal: number): number {
 }
 
 export const totalStars = (p: Progress, eggTotals: readonly number[]): number => eggTotals.reduce((sum, total, i) => sum + starsOf(p, i + 1, total), 0);
+
+/** エンドレスを 1 回遊んだ結果(meters は走った距離)。ハイスコアなら記録する。newBest は、ハイスコアを更新したか */
+export function recordEndless(p: Progress, meters: number): { progress: Progress; newBest: boolean } {
+  const m = Math.max(0, Math.min(999_999, Math.floor(meters)));
+  const newBest = m > p.endlessBest;
+  return { progress: { ...p, endlessRuns: p.endlessRuns + 1, endlessBest: newBest ? m : p.endlessBest }, newBest };
+}
 
 export const markEndingSeen = (p: Progress): Progress => ({ ...p, endingSeen: true });
 

@@ -55,6 +55,7 @@
         </header>
         <p id="progress-summary" class="progress-summary" aria-live="polite"></p>
         <ol id="stage-list" class="stage-list" aria-label="ステージ"></ol>
+        <button id="endless-open" type="button" class="endless-button">♾ エンドレス <span id="endless-best" class="muted"></span></button>
         <button id="ending-open" type="button" hidden>🎉 エンディングをもういちど見る</button>
       </section>
 
@@ -75,6 +76,7 @@
             <span id="game-title" class="hud-title"></span>
             <span id="game-best" class="hud-best muted"></span>
           </div>
+          <span id="score" class="score" aria-hidden="true">0 m</span>
           <span class="egg-counter"><span aria-hidden="true">🥚</span><span class="sr-only">たまご</span> <span id="egg-count">0/0</span></span>
           <button id="music-button-game" type="button" class="icon-button hud-music" aria-label="BGM" aria-pressed="true">🎵</button>
         </div>

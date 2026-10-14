@@ -1,6 +1,8 @@
 // ステージごとの背景の色と飾り。色はゲーム画面(Canvas)の中だけで使う。
 // 暗い背景のステージ(5・7・8・9・10)は、恐竜と障害物を明るい色にして見えやすくする。
 
+import type { GameState } from './logic';
+
 export type Decor = 'sun' | 'bigSun' | 'cloud' | 'dunes' | 'trees' | 'stalactite' | 'mountains' | 'snow' | 'volcano' | 'moon' | 'stars' | 'planet';
 
 export interface Theme {
@@ -17,6 +19,12 @@ export interface Theme {
   /** 飾りの 2 色目(山、木、星雲など) */
   decor2: string;
   decors: readonly Decor[];
+}
+
+/** そのときの背景。エンドレスは、走った距離で背景が変わる。ふつうのステージは、ステージの番号で決まる */
+export function themeOf(state: GameState): Theme {
+  const index = state.stage.themeAt ? state.stage.themeAt(state.dist) : state.stage.id - 1;
+  return THEMES[index % THEMES.length];
 }
 
 export const THEMES: readonly Theme[] = [

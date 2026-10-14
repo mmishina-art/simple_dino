@@ -550,3 +550,26 @@ button.link {
 .egg-counter {
   margin-left: 0;
 }
+
+/* エンドレスモード: ゴールも、たまごもない。かわりに、走った距離(スコア)を出す */
+.score {
+  display: none;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.game.endless .score {
+  display: inline;
+}
+
+.game.endless .progress,
+.game.endless .egg-counter {
+  display: none;
+}
+
+.endless-button {
+  display: block;
+  width: 100%;
+  margin: 12px 0 4px;
+  font-weight: 700;
+}

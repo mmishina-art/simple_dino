@@ -39,7 +39,8 @@ describe('曲のデータ', () => {
     expect(ids).toContain('title');
     expect(ids).toContain('ending');
     for (const stage of STAGES) expect(ids, `ステージ${stage.id}`).toContain(stageSongId(stage.id));
-    expect(SONGS).toHaveLength(STAGES.length + 2);
+    expect(ids).toContain('endless');
+    expect(SONGS).toHaveLength(STAGES.length + 3);
   });
 
   it.each(SONGS.map((s) => [s.id, s] as const))('%s: 小節の数・長さ・音の高さが正しい', (_id, song) => {
@@ -76,8 +77,10 @@ describe('曲のデータ', () => {
     }
   });
 
-  it('後半のステージほど、テンポが速くなる傾向(ステージ 10 はステージ 1 より 25 以上速い)', () => {
+  it('後半のステージほど、テンポが速くなる傾向(ステージ 10 はステージ 1 より 25 以上速い)。エンドレスはドライブ感のある速い曲', () => {
     expect(songById('stage10').bpm - songById('stage1').bpm).toBeGreaterThanOrEqual(25);
+    expect(songById('endless').bpm).toBeGreaterThanOrEqual(130);
+    expect(songById('endless').drums).toBe('drive');
   });
 
   it('ステージの雰囲気に合わせて、暗いステージ(洞窟・夜・宇宙)は、ドラムなしか控えめ', () => {
