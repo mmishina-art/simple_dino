@@ -1,8 +1,9 @@
 // Canvas への描画。ゲームの状態(GameState)を絵にするだけで、ルールには触れない。
 // 座標は論理 px(横 VIEW_W × 縦 VIEW_H)。実際の画面の大きさに合わせて、scale 倍で描く。
 // ドット絵がにじまないよう、四角は端末の px にそろえて塗る。
-import { DINO_W, distanceAt, type GameState, type ObstacleKind } from './logic';
-import { DINO, SPRITES, squashed, type Sprite } from './sprites';
+import { DINO_W, EGG_H, EGG_W, distanceAt, type GameState, type ObstacleKind } from './logic';
+import type { Particle, Popup } from './fx';
+import { DINO, EGG, SPRITES, squashed, type Sprite } from './sprites';
 import { THEMES, type Theme } from './themes';
 
 export const VIEW_W = 400;
@@ -19,22 +20,26 @@ const SKY_BANDS = 8;
 interface Pen {
   c: CanvasRenderingContext2D;
   s: number;
+  /** 画面のゆれ(端末の px) */
+  ox: number;
+  oy: number;
 }
 
 function rect(p: Pen, x: number, y: number, w: number, h: number, color: string): void {
   const x0 = Math.round(x * p.s);
   const y0 = Math.round(y * p.s);
   p.c.fillStyle = color;
-  p.c.fillRect(x0, y0, Math.round((x + w) * p.s) - x0, Math.round((y + h) * p.s) - y0);
+  p.c.fillRect(x0 + p.ox, y0 + p.oy, Math.round((x + w) * p.s) - x0, Math.round((y + h) * p.s) - y0);
 }
 
-function sprite(p: Pen, sp: Sprite, x: number, y: number, main: string, accent = main): void {
+function sprite(p: Pen, sp: Sprite, x: number, y: number, main: string, accent = main, edge = main): void {
   for (let r = 0; r < sp.length; r++) {
     const row = sp[r];
     for (let k = 0; k < row.length; k++) {
       const ch = row[k];
       if (ch === '#') rect(p, x + k * CELL, y + r * CELL, CELL, CELL, main);
       else if (ch === 'o') rect(p, x + k * CELL, y + r * CELL, CELL, CELL, accent);
+      else if (ch === 'k') rect(p, x + k * CELL, y + r * CELL, CELL, CELL, edge);
     }
   }
 }
@@ -173,10 +178,19 @@ function obstacleColors(kind: ObstacleKind, theme: Theme): [string, string] {
 export interface DrawOptions {
   /** 着地してすぐ(つぶれた姿にする) */
   squash: boolean;
+  /** 演出(省いてよい) */
+  particles?: readonly Particle[];
+  popups?: readonly Popup[];
+  /** 画面のゆれ(論理 px) */
+  shake?: { x: number; y: number };
 }
 
+const EGG_GOLD = '#f4b942';
+const EGG_SHINE = '#fff1a8';
+
 export function drawScene(c: CanvasRenderingContext2D, width: number, state: GameState, theme: Theme, opts: DrawOptions): void {
-  const p: Pen = { c, s: width / VIEW_W };
+  const s0 = width / VIEW_W;
+  const p: Pen = { c, s: s0, ox: Math.round((opts.shake?.x ?? 0) * s0), oy: Math.round((opts.shake?.y ?? 0) * s0) };
   const { stage } = state;
   const d = distanceAt(stage, state.frame);
 
@@ -198,6 +212,15 @@ export function drawScene(c: CanvasRenderingContext2D, width: number, state: Gam
     sprite(p, SPRITES[o.kind], x, GROUND_Y - o.h, main, accent);
   }
 
+  // たまご(まだ取っていないものだけ。ゆらゆら上下する)
+  stage.eggs.forEach((egg, i) => {
+    if (state.eggs.includes(i)) return;
+    const x = DINO_SCREEN_X + (egg.x - d);
+    if (x > VIEW_W || x + EGG_W < -4) return;
+    const bob = Math.round(Math.sin(state.frame / 9 + i * 1.7) * 2);
+    sprite(p, EGG, x, GROUND_Y - egg.y - EGG_H + bob, EGG_GOLD, EGG_SHINE, theme.dino);
+  });
+
   // 恐竜(当たり判定は絵より少し小さく、絵の中央にある)
   let dino: Sprite = DINO.stand;
   if (state.status === 'dead') dino = DINO.dead;
@@ -205,6 +228,27 @@ export function drawScene(c: CanvasRenderingContext2D, width: number, state: Gam
   const drawn = opts.squash && state.grounded && state.status === 'running' ? squashed(dino) : dino;
   const x = DINO_SCREEN_X - (dino[0].length * CELL - DINO_W) / 2;
   sprite(p, drawn, x, GROUND_Y - state.y - drawn.length * CELL, theme.dino);
+
+  // 演出: 土ぼこり・キラキラ・紙ふぶき
+  for (const part of opts.particles ?? []) {
+    c.globalAlpha = Math.max(0, Math.min(1, (part.life / part.max) * 1.6));
+    rect(p, part.x, part.y, part.size, part.size, part.color);
+  }
+  c.globalAlpha = 1;
+
+  // ふきだしの文字(「ぎりぎり!」)
+  for (const pop of opts.popups ?? []) {
+    c.globalAlpha = Math.max(0, Math.min(1, (pop.life / pop.max) * 2));
+    c.font = `bold ${Math.round(15 * p.s)}px system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif`;
+    c.textAlign = 'center';
+    c.lineJoin = 'round';
+    c.lineWidth = Math.round(4 * p.s);
+    c.strokeStyle = theme.dino;
+    c.strokeText(pop.text, Math.round(pop.x * p.s) + p.ox, Math.round(pop.y * p.s) + p.oy);
+    c.fillStyle = pop.color;
+    c.fillText(pop.text, Math.round(pop.x * p.s) + p.ox, Math.round(pop.y * p.s) + p.oy);
+  }
+  c.globalAlpha = 1;
 }
 
 // ---- エンディング ----
@@ -213,7 +257,7 @@ const CONFETTI = ['#ffd25a', '#ff8fb0', '#7fd18a', '#7ab8ff'];
 
 /** 全ステージクリアのエンディング。夜があけて、恐竜が旗の前でよろこぶ。t は経過秒 */
 export function drawEnding(c: CanvasRenderingContext2D, width: number, t: number): void {
-  const p: Pen = { c, s: width / VIEW_W };
+  const p: Pen = { c, s: width / VIEW_W, ox: 0, oy: 0 };
   const theme = THEMES[0];
   const k = Math.min(1, t / 5);
 
@@ -258,7 +302,7 @@ export function drawEnding(c: CanvasRenderingContext2D, width: number, t: number
 
 /** タイトル画面の絵: 恐竜が、流れてくるサボテンや岩を、次々に跳び越える。t は経過秒 */
 export function drawTitle(c: CanvasRenderingContext2D, width: number, t: number): void {
-  const p: Pen = { c, s: width / VIEW_W };
+  const p: Pen = { c, s: width / VIEW_W, ox: 0, oy: 0 };
   const theme = THEMES[0];
   const d = t * 110;
 

@@ -33,7 +33,8 @@ export function requestPersist(): void {
 
 /** 保存データの形が変わったときの移行処理。from → from+1 の変換を、ここに足していく。 */
 function migrate(from: number): void {
-  // 例: if (from < 2) { /* 版 1 → 2 の変換 */ }
+  // 版 1 → 2: 進み具合(progress)に、ベスト %・取ったたまご・★の項目が増えた。
+  // 古い記録には、その項目がないだけなので、変換は要らない(progress.ts の sanitizeProgress が、ない項目を空として読む)。
   void from;
 }
 

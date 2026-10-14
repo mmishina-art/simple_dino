@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BUFFER_FRAMES, DINO_W, FPS, JUMP_V, distanceAt, goalFrame, hits, newGame, step, stepBody, type GameState, type Input, type StageDef,
+  BUFFER_FRAMES, DINO_W, FPS, JUMP_V, distanceAt, goalFrame, hits, newGame, step, stepBody, touchesEgg, trackNearMiss, progressPercent, NEAR_MISS_PX, type GameState, type Input, type StageDef,
 } from '../src/logic';
 
 const NONE: Input = { pressed: false, held: false };
 const PRESS: Input = { pressed: true, held: true };
 const HOLD: Input = { pressed: false, held: true };
 
-const flat: StageDef = { id: 0, name: 'test', speed: 240, length: 2000, obstacles: [] };
+const flat: StageDef = { id: 0, name: 'test', speed: 240, length: 2000, obstacles: [], eggs: [] };
 const withObstacle = (x: number, h = 26): StageDef => ({ ...flat, obstacles: [{ kind: 'S', x, w: 14, h }] });
 
 function run(s: GameState, inputs: readonly Input[]): GameState {
@@ -93,6 +93,102 @@ describe('ジャンプ', () => {
     expect(stepBody(10, 300, true).vy).toBeGreaterThan(stepBody(10, 300, false).vy);
     // 下りでは、押していても同じ
     expect(stepBody(50, -100, true).vy).toBe(stepBody(50, -100, false).vy);
+  });
+});
+
+describe('たまご', () => {
+  const withEgg = (x: number, y: number): StageDef => ({ ...flat, eggs: [{ x, y }] });
+
+  it('地面のたまごは、走って通りぬけると取れる', () => {
+    let s = newGame(withEgg(300, 0));
+    while (s.status === 'running') s = step(s, NONE);
+    expect(s.eggs).toEqual([0]);
+  });
+
+  it('高いたまごは、走っているだけでは取れず、ジャンプでふれると取れる', () => {
+    const stage = withEgg(300, 90);
+    let s = newGame(stage);
+    while (s.status === 'running') s = step(s, NONE);
+    expect(s.eggs).toEqual([]);
+    s = newGame(stage);
+    while (s.status === 'running') {
+      const near = distanceAt(stage, s.frame) > 300 - 50;
+      s = step(s, near ? { pressed: s.grounded, held: true } : NONE);
+    }
+    expect(s.eggs).toEqual([0]);
+  });
+
+  it('同じたまごを 2 回数えない', () => {
+    const stage = withEgg(300, 0);
+    let s = newGame(stage);
+    let max = 0;
+    while (s.status === 'running') {
+      s = step(s, NONE);
+      max = Math.max(max, s.eggs.length);
+    }
+    expect(max).toBe(1);
+  });
+
+  it('shrink を大きくすると、取る範囲がせまくなる', () => {
+    const egg = { x: 100, y: 0 };
+    expect(touchesEgg(egg, 100 - DINO_W - 3, 0)).toBe(true);
+    expect(touchesEgg(egg, 100 - DINO_W - 3, 0, 2)).toBe(false);
+    expect(touchesEgg(egg, 100 - DINO_W - 5, 0)).toBe(false);
+  });
+});
+
+describe('ぎりぎり判定と進み具合', () => {
+  const obstacleStage = withObstacle(400);
+
+  /** ジャンプを frame フレーム目に押して hold フレーム押し続けたとき、生き残ったか・ぎりぎりで越えた数 */
+  function tryJump(frame: number, hold: number): { alive: boolean; near: number } {
+    let s = newGame(obstacleStage);
+    const minClear = new Map<number, number>();
+    let near = 0;
+    while (s.status === 'running') {
+      const pressed = s.frame === frame;
+      s = step(s, { pressed, held: s.frame >= frame && s.frame < frame + hold });
+      near += trackNearMiss(minClear, s).length;
+    }
+    return { alive: s.status === 'cleared', near };
+  }
+
+  it('すきまがせまいまま越えたときだけ、ぎりぎり。ぶつかったときと、余裕で越えたときは、ぎりぎりではない', () => {
+    const results = [];
+    for (let frame = 30; frame <= 80; frame++) for (const hold of [1, 3, 6, 10, 25]) results.push(tryJump(frame, hold));
+    const survived = results.filter((r) => r.alive);
+    expect(survived.some((r) => r.near > 0), 'ぎりぎりで越える跳び方がある').toBe(true);
+    expect(survived.some((r) => r.near === 0), '余裕で越える跳び方もある').toBe(true);
+    expect(results.filter((r) => !r.alive).every((r) => r.near === 0), 'ぶつかったら、ぎりぎりとは数えない').toBe(true);
+    expect(Math.max(...survived.map((r) => r.near))).toBe(1);
+  });
+
+  it('障害物の上を通らない(地面を走るだけの)ときは、何も起きない', () => {
+    const stage = { ...flat, obstacles: [{ kind: 'S' as const, x: 5000, w: 14, h: 26 }] };
+    let s = newGame(stage);
+    const minClear = new Map<number, number>();
+    let near = 0;
+    for (let i = 0; i < 100; i++) {
+      s = step(s, NONE);
+      near += trackNearMiss(minClear, s).length;
+    }
+    expect(near).toBe(0);
+    expect(minClear.size).toBe(0);
+    expect(NEAR_MISS_PX).toBeGreaterThan(0);
+  });
+
+  it('進み具合は 0〜99 %(ゴールしたら 100)', () => {
+    let s = newGame(flat);
+    expect(progressPercent(s)).toBe(0);
+    for (let i = 0; i < goalFrame(flat) / 2; i++) s = step(s, NONE);
+    expect(progressPercent(s)).toBeGreaterThanOrEqual(49);
+    expect(progressPercent(s)).toBeLessThanOrEqual(50);
+    while (s.status === 'running') s = step(s, NONE);
+    expect(s.status).toBe('cleared');
+    expect(progressPercent(s)).toBe(100);
+    // やられたときは 99 を超えない
+    const dead = { ...s, status: 'dead' as const, frame: goalFrame(flat) };
+    expect(progressPercent(dead)).toBeLessThanOrEqual(99);
   });
 });
 

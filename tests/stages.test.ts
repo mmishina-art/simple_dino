@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { goalFrame, step, newGame, FPS, JUMP_V, OBSTACLE_SIZES, distanceAt } from '../src/logic';
+import { goalFrame, step, newGame, FPS, JUMP_V, OBSTACLE_SIZES, EGG_H, EGG_W, distanceAt } from '../src/logic';
 import { STAGES, parseLayout } from '../src/stages';
 import { canClear, findPlan, jumpTrajectory, maxMargin } from './solver';
 
@@ -60,6 +60,58 @@ describe('ステージのデータ', () => {
       expect(hasT, `ステージ${s.id}`).toBe(s.id >= 6);
     }
   });
+});
+
+describe('たまごの配置', () => {
+  it('どのステージにも 3〜5 個。後半ほど、減らない', () => {
+    STAGES.forEach((s, i) => {
+      expect(s.eggs.length, `ステージ${s.id}`).toBeGreaterThanOrEqual(3);
+      expect(s.eggs.length, `ステージ${s.id}`).toBeLessThanOrEqual(5);
+      if (i > 0) expect(s.eggs.length, `ステージ${s.id}`).toBeGreaterThanOrEqual(STAGES[i - 1].eggs.length);
+    });
+  });
+
+  it('位置の順に並び、たがいに離れていて、スタート直後とゴール直前には置かない', () => {
+    for (const s of STAGES) {
+      s.eggs.forEach((e, i) => {
+        if (i > 0) expect(e.x - s.eggs[i - 1].x, `ステージ${s.id} の ${i + 1} 個目`).toBeGreaterThanOrEqual(60);
+        expect(e.x / s.speed, `ステージ${s.id}: スタートから(秒)`).toBeGreaterThanOrEqual(2);
+        expect((s.length - e.x) / s.speed, `ステージ${s.id}: ゴールまで(秒)`).toBeGreaterThanOrEqual(2);
+        expect(e.y).toBeGreaterThanOrEqual(0);
+        expect(e.y + EGG_H, `ステージ${s.id}: 高すぎて画面に入らない`).toBeLessThanOrEqual(150);
+      });
+    }
+  });
+
+  it('障害物と重ならない', () => {
+    for (const s of STAGES) {
+      for (const e of s.eggs) {
+        const overlap = s.obstacles.some((o) => e.x < o.x + o.w && e.x + EGG_W > o.x && e.y < o.h && e.y + EGG_H > 0);
+        expect(overlap, `ステージ${s.id} のたまご x=${e.x}`).toBe(false);
+      }
+    }
+  });
+
+  it('地面のたまごと、空中のたまごの両方がある', () => {
+    for (const s of STAGES) {
+      expect(s.eggs.some((e) => e.y === 0), `ステージ${s.id}: 地面`).toBe(true);
+      expect(s.eggs.some((e) => e.y > 40), `ステージ${s.id}: 空中`).toBe(true);
+    }
+  });
+
+  it.each(STAGES.map((s) => [s.id, s] as const))('ステージ %i: 全部のたまごを取りながら、ゲーム本体(step)でクリアできる', (_id, stage) => {
+    // 障害物の判定を 4px 厳しく、たまごを取る範囲を 2px せまくしても取れる経路
+    const plan = findPlan(stage, 4, 2);
+    expect(plan).not.toBeNull();
+    let s = newGame(stage);
+    const moves = [...(plan ?? [])];
+    while (s.status === 'running') {
+      const m = moves.find((x) => s.frame >= x.frame && s.frame < x.frame + x.hold);
+      s = step(s, { pressed: moves.some((x) => x.frame === s.frame), held: m !== undefined });
+    }
+    expect(s.status).toBe('cleared');
+    expect(s.eggs.length).toBe(stage.eggs.length);
+  }, 60_000);
 });
 
 describe('クリアできるか(ジャンプの押し方を総当たりして確かめる)', () => {

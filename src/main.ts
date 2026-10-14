@@ -2,7 +2,7 @@ import './style.css';
 import { startEnding, startTitle } from './ending';
 import { Player } from './play';
 import {
-  allCleared, isCleared, isUnlocked, markEndingSeen, recordAttempt, recordClear, sanitizeProgress, totalAttempts, type Progress,
+  allCleared, bestOf, isCleared, isUnlocked, markEndingSeen, recordAttempt, recordClear, recordDeath, sanitizeProgress, starsOf, totalAttempts, totalStars, type Progress,
 } from './progress';
 import { STAGES } from './stages';
 import { setupInstallGuide } from './install';
@@ -54,6 +54,9 @@ function updateProgress(next: Progress): void {
 
 // ---- ステージ選択 ----
 
+/** ★の数を「★★☆」の形にする(色だけでなく形でも、数が分かるように) */
+const starText = (n: number): string => '★'.repeat(n) + '☆'.repeat(3 - n);
+
 function renderStageList(): void {
   const list = $('stage-list');
   list.replaceChildren();
@@ -66,7 +69,8 @@ function renderStageList(): void {
     button.className = 'stage-button';
     button.disabled = !unlocked;
     // 色だけでなく、記号と読み上げでも状態を伝える
-    const state = cleared ? 'クリア済み' : unlocked ? '' : `ロック中。ステージ${stage.id - 1}をクリアすると遊べます`;
+    const stars = starsOf(progress, stage.id, stage.eggs.length);
+    const state = cleared ? `クリア済み、ほし${stars}つ` : unlocked ? '' : `ロック中。ステージ${stage.id - 1}をクリアすると遊べます`;
     button.setAttribute('aria-label', `ステージ${stage.id} ${stage.name}${state ? `(${state})` : ''}`);
     const num = document.createElement('span');
     num.className = 'stage-num';
@@ -77,14 +81,15 @@ function renderStageList(): void {
     const mark = document.createElement('span');
     mark.className = 'stage-state';
     mark.setAttribute('aria-hidden', 'true');
-    mark.textContent = cleared ? '★' : unlocked ? '' : '🔒';
+    mark.textContent = cleared ? starText(stars) : unlocked ? '☆☆☆' : '🔒';
     button.append(num, name, mark);
     button.addEventListener('click', () => openStage(stage));
     li.append(button);
     list.append(li);
   }
   const done = allCleared(progress, STAGES.length);
-  $('progress-summary').textContent = done ? `★ ぜんぶクリア! (${STAGES.length}/${STAGES.length})` : `クリア ${progress.cleared.length}/${STAGES.length}`;
+  const stars = `★ ${totalStars(progress, STAGES.map((s) => s.eggs.length))}/${STAGES.length * 3}`;
+  $('progress-summary').textContent = done ? `★ ぜんぶクリア! (${STAGES.length}/${STAGES.length}) ・ ${stars}` : `クリア ${progress.cleared.length}/${STAGES.length} ・ ${stars}`;
   $('ending-open').hidden = !done;
   $('title-summary').textContent = progress.cleared.length > 0 ? `つづき: ${done ? '★ ぜんぶクリア!' : `クリア ${progress.cleared.length}/${STAGES.length}`}` : '';
 }
@@ -111,33 +116,49 @@ const player = new Player(
   {
     onJump: () => sfx('jump'),
     onLand: () => undefined,
-    onDead: () => {
+    onEgg: (count, total) => {
+      if (count > 0) sfx('egg');
+      $('egg-count').textContent = `${count}/${total}`;
+    },
+    onNearMiss: () => sfx('near'),
+    onDead: ({ percent, eggs }) => {
       setScene(null);
       sfx('dead');
-      status.textContent = 'ゲームオーバー';
-      showOverlay('ざんねん!', 'もういちど挑戦しよう', [
+      const { progress: next, newBest } = recordDeath(progress, current.id, percent);
+      updateProgress(next);
+      renderBest();
+      const best = bestOf(progress, current.id);
+      const line = newBest ? 'ベスト更新!' : `ベスト ${best}%`;
+      status.textContent = `ゲームオーバー。${percent}パーセントまで進みました。${line}`;
+      showOverlay('ざんねん!', `${percent}% まで進んだ\n${line}\nたまご ${eggs}/${current.eggs.length}`, [
         { label: 'もういちど', primary: true, run: () => restart() },
         { label: 'ステージ選択', run: () => closeStage() },
       ]);
     },
-    onCleared: () => {
+    onCleared: ({ eggs }) => {
       setScene(null);
       sfx('clear');
-      status.textContent = 'ステージクリア';
       const first = !isCleared(progress, current.id);
-      updateProgress(recordClear(progress, current.id));
+      const before = starsOf(progress, current.id, current.eggs.length);
+      updateProgress(recordClear(progress, current.id, eggs, current.eggs.length));
+      const stars = starsOf(progress, current.id, current.eggs.length);
       renderStageList();
+      renderBest();
       const next = STAGES.find((s) => s.id === current.id + 1);
       const last = current.id === STAGES.length;
+      status.textContent = `ステージクリア。ほし${stars}つ。たまごは${current.eggs.length}個中${eggs.length}個`;
       if (last && allCleared(progress, STAGES.length) && !progress.endingSeen) {
         updateProgress(markEndingSeen(progress));
         openEnding();
         return;
       }
-      const tries = progress.firstClearTries[current.id];
-      let text = first ? `${tries}回目の挑戦でクリア!` : `${current.name} をクリアした`;
-      if (first && next) text += ` ステージ${next.id}が遊べるようになった`;
-      showOverlay('ステージクリア!', text, [
+      const lines = [`${starText(stars)}${stars > before && !first ? ' ★ふえた!' : ''}`];
+      lines.push(first ? `${progress.firstClearTries[current.id]}回目の挑戦でクリア!` : `${current.name} をクリアした`);
+      lines.push(`たまご ${eggs.length}/${current.eggs.length}`);
+      if (stars === 1) lines.push('たまごを全部取ると ★2');
+      else if (stars === 2) lines.push('1回で全部取ると ★3');
+      if (first && next) lines.push(`ステージ${next.id}が遊べるようになった`);
+      showOverlay('ステージクリア!', lines.join('\n'), [
         ...(next ? [{ label: 'つぎのステージ', primary: true, run: () => openStage(next) }] : []),
         ...(last && allCleared(progress, STAGES.length) ? [{ label: 'エンディング', primary: true, run: () => openEnding() }] : []),
         { label: 'もういちど', run: () => restart() },
@@ -183,11 +204,22 @@ function openStage(stage: StageDef): void {
   current = stage;
   show(game);
   $('game-title').textContent = `ステージ${stage.id} ${stage.name}`;
+  renderBest();
   hideOverlay();
   hint.hidden = false;
   status.textContent = '';
   player.load(stage);
   setScene(stageSongId(stage.id), { restart: true });
+}
+
+/** 進み具合の棒に、これまででいちばん進んだ場所の印をつけ、ベストを文字でも出す */
+function renderBest(): void {
+  const best = bestOf(progress, current.id);
+  const marker = $('best-marker');
+  marker.hidden = best <= 0 || best >= 100;
+  marker.style.setProperty('left', `${best}%`);
+  const stars = starsOf(progress, current.id, current.eggs.length);
+  $('game-best').textContent = isCleared(progress, current.id) ? starText(stars) : best > 0 ? `ベスト ${best}%` : '';
 }
 
 /** 同じステージを、すぐにやり直す */

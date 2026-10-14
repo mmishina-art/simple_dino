@@ -10,10 +10,16 @@ export interface Progress {
   firstClearTries: Record<string, number>;
   /** 全ステージクリアのエンディングを見たか */
   endingSeen: boolean;
+  /** ステージごとの、いちばん進んだ場所(0〜100 %)。クリアしたら 100 */
+  bestPercent: Record<string, number>;
+  /** ステージごとの、クリアしたときに取っていたたまごの番号(何回かのクリアの合計) */
+  eggs: Record<string, number[]>;
+  /** 1 回のクリアで、たまごを全部取った(★3つ)ステージの番号 */
+  perfect: number[];
 }
 
 export function emptyProgress(): Progress {
-  return { cleared: [], attempts: {}, firstClearTries: {}, endingSeen: false };
+  return { cleared: [], attempts: {}, firstClearTries: {}, endingSeen: false, bestPercent: {}, eggs: {}, perfect: [] };
 }
 
 const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < 1_000_000;
@@ -31,6 +37,16 @@ export function sanitizeProgress(raw: unknown, stageCount: number): Progress {
     for (const [k, v] of Object.entries(src)) if (validId(Number(k)) && isCount(v)) p[key][k] = v;
   }
   p.endingSeen = r.endingSeen === true;
+  // 版 2 で足した項目(古い記録にはない)
+  if (r.bestPercent && typeof r.bestPercent === 'object') {
+    for (const [k, v] of Object.entries(r.bestPercent)) if (validId(Number(k)) && isCount(v) && v <= 100) p.bestPercent[k] = v;
+  }
+  if (r.eggs && typeof r.eggs === 'object') {
+    for (const [k, v] of Object.entries(r.eggs)) {
+      if (validId(Number(k)) && Array.isArray(v)) p.eggs[k] = [...new Set(v.filter((i): i is number => isCount(i) && i < 20))].sort((a, b) => a - b);
+    }
+  }
+  if (Array.isArray(r.perfect)) p.perfect = [...new Set(r.perfect.filter(validId))].sort((a, b) => a - b);
   return p;
 }
 
@@ -46,15 +62,42 @@ export function recordAttempt(p: Progress, id: number): Progress {
   return { ...p, attempts: { ...p.attempts, [id]: (p.attempts[id] ?? 0) + 1 } };
 }
 
-/** クリアした。はじめてのクリアなら、そのときの挑戦回数を残す */
-export function recordClear(p: Progress, id: number): Progress {
-  if (isCleared(p, id)) return p;
+/** やられた。進んだ場所(percent)がベストなら記録する。newBest は、ベストを更新したか(はじめてのステージも更新) */
+export function recordDeath(p: Progress, id: number, percent: number): { progress: Progress; newBest: boolean } {
+  const pct = Math.max(0, Math.min(99, Math.floor(percent)));
+  const prev = p.bestPercent[id];
+  if (prev !== undefined && pct <= prev) return { progress: p, newBest: false };
+  return { progress: { ...p, bestPercent: { ...p.bestPercent, [id]: pct } }, newBest: true };
+}
+
+/**
+ * クリアした(collected: この回に取ったたまごの番号、eggTotal: そのステージのたまごの数)。
+ * はじめてのクリアなら、そのときの挑戦回数を残す。たまごは、何回かのクリアの合計。
+ */
+export function recordClear(p: Progress, id: number, collected: readonly number[] = [], eggTotal = 0): Progress {
+  const mine = [...new Set([...(p.eggs[id] ?? []), ...collected])].sort((a, b) => a - b);
+  const perfect = eggTotal > 0 && new Set(collected).size >= eggTotal;
   return {
     ...p,
-    cleared: [...p.cleared, id].sort((a, b) => a - b),
-    firstClearTries: { ...p.firstClearTries, [id]: Math.max(1, p.attempts[id] ?? 1) },
+    cleared: isCleared(p, id) ? p.cleared : [...p.cleared, id].sort((a, b) => a - b),
+    firstClearTries: isCleared(p, id) ? p.firstClearTries : { ...p.firstClearTries, [id]: Math.max(1, p.attempts[id] ?? 1) },
+    bestPercent: { ...p.bestPercent, [id]: 100 },
+    eggs: { ...p.eggs, [id]: mine },
+    perfect: perfect && !p.perfect.includes(id) ? [...p.perfect, id].sort((a, b) => a - b) : p.perfect,
   };
 }
+
+/** いちばん進んだ場所(0〜100 %)。クリア済みなら 100(古い記録にも対応) */
+export const bestOf = (p: Progress, id: number): number => (isCleared(p, id) ? 100 : (p.bestPercent[id] ?? 0));
+
+/** ★の数(0〜3)。クリアで 1、たまごを全部取った(何回かの合計でよい)で 2、1 回のクリアで全部取って 3 */
+export function starsOf(p: Progress, id: number, eggTotal: number): number {
+  if (!isCleared(p, id)) return 0;
+  const gotAll = eggTotal > 0 && (p.eggs[id]?.length ?? 0) >= eggTotal;
+  return 1 + (gotAll ? 1 : 0) + (p.perfect.includes(id) ? 1 : 0);
+}
+
+export const totalStars = (p: Progress, eggTotals: readonly number[]): number => eggTotals.reduce((sum, total, i) => sum + starsOf(p, i + 1, total), 0);
 
 export const markEndingSeen = (p: Progress): Progress => ({ ...p, endingSeen: true });
 
