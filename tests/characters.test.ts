@@ -53,7 +53,7 @@ describe('キャラ', () => {
     expect(touchesEgg(egg, 100, 100, 0, chibi.body)).toBe(false);
   });
 
-  it('ちびダイノの絵は、判定(14×16)より少し大きくてよい。判定は足もとの中央にあり、絵の大きさとは別', () => {
+  it('ちびダイノの絵は、判定(14×16)より少し大きくてよい。判定は足もとの中央にあり、絵の大きさとは別。目と口の穴がある', () => {
     for (const k of ['stand', 'runA', 'runB', 'dead'] as const) {
       const rows = DINO_CHIBI[k];
       expect(rows.length * 2).toBeGreaterThanOrEqual(chibi.body.h);
@@ -63,6 +63,15 @@ describe('キャラ', () => {
       // 足が地面につく(いちばん下の行に、足のふちがある)
       expect(rows[rows.length - 1]).toMatch(/[k#]/);
     }
+  });
+
+  it('ちびダイノの頭は、元の絵より大きく(幅 7 マス)、目の穴と、あいた口がある', () => {
+    const head = DINO_CHIBI.stand;
+    expect(head[1].replace(/\./g, '').length).toBeGreaterThanOrEqual(7); // 頭のいちばん広い行
+    expect(head[2]).toMatch(/#\.#/); // 目の穴(まわりを囲まれている)
+    expect(head[3]).toMatch(/#\.\.\.$/); // 口: 前(右)がひらいている
+    expect(head[4]).toMatch(/#{7}$/); // あごは、口の下でつながる
+    expect(DINO_CHIBI.dead[2]).not.toBe(head[2]); // やられた顔は、目がちがう
   });
 });
 
