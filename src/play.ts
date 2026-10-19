@@ -2,7 +2,7 @@
 // 画面のリフレッシュレートが違っても(60Hz / 120Hz)、ゲームの速さは変わらない。
 // 演出(土ぼこり・キラキラ・画面のゆれ・紙ふぶき)は、見た目だけ。動きを減らす設定のときは出さない。
 import {
-  BOOST_FRAMES, DT, DINO_H, DINO_W, newGame, progressPercent, scoreMultiplier, step, trackNearMiss, type GameState, type StageDef,
+  BOOST_FRAMES, DT, bodyOf, newGame, progressPercent, scoreMultiplier, step, trackNearMiss, type GameState, type StageDef,
 } from './logic';
 import {
   advanceParticles, advancePopups, confetti, crash, dust, shakeOffset, sparkle, type Particle, type Popup,
@@ -176,7 +176,8 @@ export class Player {
   /** 1 ステップごとの出来事(音と演出) */
   private onStep(prev: GameState, s: GameState): void {
     const theme = themeOf(s);
-    const feet = { x: DINO_SCREEN_X + DINO_W / 2, y: GROUND_Y - 1 };
+    const body = bodyOf(s.stage);
+    const feet = { x: DINO_SCREEN_X + body.w / 2, y: GROUND_Y - 1 };
     if (!s.grounded && (prev.grounded || s.vy > prev.vy)) {
       this.handlers.onJump();
       this.spawn(dust(feet.x - 4, feet.y, 4, theme.groundLine, Math.random));
@@ -190,17 +191,17 @@ export class Player {
     if (s.grounded && s.frame % 8 === 0) this.spawn(dust(feet.x - 8, feet.y, 1, theme.groundLine, Math.random));
     // 肉
     if (s.meats.length > prev.meats.length) {
-      this.spawn(sparkle(DINO_SCREEN_X + DINO_W / 2, GROUND_Y - s.y - DINO_H / 2, 12, '#e8704a', Math.random, 120));
+      this.spawn(sparkle(DINO_SCREEN_X + body.w / 2, GROUND_Y - s.y - body.h / 2, 12, '#e8704a', Math.random, 120));
       this.handlers.onMeat(s.boost);
     }
     // たまご
     if (s.eggs.length > prev.eggs.length) {
-      this.spawn(sparkle(DINO_SCREEN_X + DINO_W / 2, GROUND_Y - s.y - DINO_H / 2, 10, '#f4b942', Math.random, 110));
+      this.spawn(sparkle(DINO_SCREEN_X + body.w / 2, GROUND_Y - s.y - body.h / 2, 10, '#f4b942', Math.random, 110));
       this.handlers.onEgg(s.eggs.length, s.stage.eggs.length);
     }
     // ぎりぎりで越えた
     if (trackNearMiss(this.minClear, s).length > 0) {
-      this.spawn(sparkle(DINO_SCREEN_X + DINO_W / 2, GROUND_Y - s.y + 4, 8, '#ffffff', Math.random, 80));
+      this.spawn(sparkle(DINO_SCREEN_X + body.w / 2, GROUND_Y - s.y + 4, 8, '#ffffff', Math.random, 80));
       if (!this.reduced) this.popups.push({ text: 'ぎりぎり!', x: DINO_SCREEN_X + 36, y: GROUND_Y - s.y - 34, life: 0.8, max: 0.8, color: '#ffe27a' });
       this.handlers.onNearMiss();
     }
@@ -210,9 +211,10 @@ export class Player {
   private onEnd(): void {
     const s = this.state;
     const theme = themeOf(s);
+    const body = bodyOf(s.stage);
     if (s.status === 'dead') {
       this.shakeLeft = SHAKE_FRAMES;
-      this.spawn(crash(DINO_SCREEN_X + DINO_W / 2, GROUND_Y - s.y - DINO_H / 2, theme.dino, Math.random));
+      this.spawn(crash(DINO_SCREEN_X + body.w / 2, GROUND_Y - s.y - body.h / 2, theme.dino, Math.random));
     } else {
       this.spawn(confetti(70, VIEW_W, Math.random));
     }

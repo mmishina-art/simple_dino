@@ -602,3 +602,36 @@ button.link {
   margin: 12px 0 4px;
   font-weight: 700;
 }
+
+/* キャラの選択(ステージ選択の上) */
+.character-picker {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.character-picker button {
+  flex: 1;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  line-height: 1.2;
+}
+
+.character-picker button small {
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.character-picker button[aria-pressed='true'] {
+  border-width: 2px;
+  border-color: var(--primary);
+  font-weight: 700;
+}
+
+#ending-stats {
+  white-space: pre-line;
+}

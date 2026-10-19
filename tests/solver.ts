@@ -1,6 +1,6 @@
 // テスト用の「解けるか調べる」仕組み。ジャンプの押し方(いつ押して、何フレーム押し続けるか)を総当たりして、
 // 障害物に当たらずゴールできるかを調べる。ゲームと同じ物理(src/game.ts)を使う。
-import { DT, JUMP_V, distanceAt, goalFrame, hits, stepBody, touchesEgg, type StageDef } from '../src/logic';
+import { DT, JUMP_V, bodyOf, distanceAt, goalFrame, hits, stepBody, touchesEgg, type StageDef } from '../src/logic';
 
 const MAX_HOLD = 40;
 
@@ -52,7 +52,8 @@ export function findPlan(stage: StageDef, margin: number, eggShrink?: number, fa
   const withEggs = eggShrink !== undefined;
   const eggs = withEggs ? stage.eggs : [];
   const shrink = eggShrink ?? 0;
-  const safe = (f: number, y: number): boolean => !hits(stage.obstacles, dists[f], y, margin);
+  const body = bodyOf(stage);
+  const safe = (f: number, y: number): boolean => !hits(stage.obstacles, dists[f], y, margin, body.w);
 
   // フレームごとに、恐竜が横にかさなっているたまごの番号(なければ -1)。たまごどうしは離れているので、同時に 1 つだけ
   const eggAt = new Int16Array(total + 1).fill(-1);
@@ -60,7 +61,7 @@ export function findPlan(stage: StageDef, margin: number, eggShrink?: number, fa
     for (let f = 0; f <= total; f++) {
       const dx = dists[f];
       eggs.forEach((e, i) => {
-        if (touchesEgg(e, dx, e.y, shrink)) eggAt[f] = i;
+        if (touchesEgg(e, dx, e.y, shrink, body)) eggAt[f] = i;
       });
     }
   }
@@ -76,7 +77,7 @@ export function findPlan(stage: StageDef, margin: number, eggShrink?: number, fa
         cur = e;
         got = 0;
       }
-      if (e >= 0 && touchesEgg(eggs[e], dists[f + k], ys[k - 1], shrink)) got = 1;
+      if (e >= 0 && touchesEgg(eggs[e], dists[f + k], ys[k - 1], shrink, body)) got = 1;
     }
     return cur >= 0 ? got : 0;
   };
