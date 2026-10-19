@@ -548,8 +548,21 @@ test('ちびダイノ: 全クリア前は鍵つき。全クリアすると選べ
   expect(saved).toBe('"chibi"');
 });
 
-test('デバッグモード(?debug): ちびダイノと全ステージを、クリアしなくても選べる。普通のアドレスでは、そうならない', async ({ page }) => {
-  await page.goto('/?debug');
+test('デバッグモード(隠しコマンド): バージョンを 7 回タップで、ちびダイノと全ステージを選べる。もう一度でもどる。バックアップには入らない', async ({ page }) => {
+  await page.goto('/');
+  const tapVersion = async (n: number): Promise<void> => {
+    for (let i = 0; i < n; i++) await page.locator('.version').click();
+  };
+  // 6 回では、何も起きない
+  await tapVersion(6);
+  await toSelect(page);
+  await expect(page.locator('#debug-note')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'ステージ10 ラスト' })).toBeDisabled();
+  await page.getByRole('button', { name: 'タイトルにもどる' }).click();
+
+  // 7 回でオン
+  await tapVersion(7);
+  await expect(page.locator('#title-summary')).toHaveText('デバッグモード: オン');
   await toSelect(page);
   await expect(page.locator('#debug-note')).toBeVisible();
   await expect(page.getByRole('button', { name: /ちびダイノ/ })).toBeEnabled();
@@ -558,8 +571,20 @@ test('デバッグモード(?debug): ちびダイノと全ステージを、ク�
   await page.getByRole('button', { name: 'ステージ10 ラスト' }).click();
   await expect(page.locator('#game-title')).toHaveText('ステージ10 ラスト🐣');
 
-  // ふつうのアドレスで開き直すと、もとにもどる(選んだキャラは、鍵つきなのでダイノ)
-  await page.goto('/');
+  // 読み込み直しても、オンのまま。バックアップには入らない
+  await page.reload();
+  await toSelect(page);
+  await expect(page.locator('#debug-note')).toBeVisible();
+  await page.getByRole('button', { name: 'タイトルにもどる' }).click();
+  await page.getByText('記録のバックアップ').click();
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'ファイルに書き出す' }).click()]);
+  const { readFileSync } = await import('node:fs');
+  const exported = JSON.parse(readFileSync(await download.path(), 'utf8')) as { data: Record<string, string> };
+  expect(Object.keys(exported.data)).not.toContain(`${APP_ID}-debug`);
+
+  // もう 7 回でオフ: 鍵つきにもどり、キャラもダイノにもどる
+  await tapVersion(7);
+  await expect(page.locator('#title-summary')).toHaveText('デバッグモード: オフ');
   await toSelect(page);
   await expect(page.locator('#debug-note')).toBeHidden();
   await expect(page.getByRole('button', { name: /ちびダイノ/ })).toBeDisabled();

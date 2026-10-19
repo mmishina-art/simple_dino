@@ -58,7 +58,8 @@ export function exportBackup(): string {
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key?.startsWith(`${PREFIX}-`)) data[key] = localStorage.getItem(key) ?? '';
+      // デバッグモードの印は、バックアップに入れない(読み込んだ先で、勝手にオンになるのを防ぐ)
+      if (key?.startsWith(`${PREFIX}-`) && key !== `${PREFIX}-debug`) data[key] = localStorage.getItem(key) ?? '';
     }
   } catch {
     // 読めなければ空のバックアップになる
@@ -69,7 +70,7 @@ export function exportBackup(): string {
 /** バックアップの中身を保存する。おかしいファイルは例外（理由つき）で止める。保存した件数を返す。 */
 export function importBackup(text: string): number {
   const data = parseBackup(text);
-  const keys = Object.keys(data).filter((k) => k.startsWith(`${PREFIX}-`));
+  const keys = Object.keys(data).filter((k) => k.startsWith(`${PREFIX}-`) && k !== `${PREFIX}-debug`);
   for (const key of keys) localStorage.setItem(key, data[key]);
   return keys.length;
 }

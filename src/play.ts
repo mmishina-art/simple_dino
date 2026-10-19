@@ -196,7 +196,7 @@ export class Player {
     }
     // たまご
     if (s.eggs.length > prev.eggs.length) {
-      this.spawn(sparkle(DINO_SCREEN_X + body.w / 2, GROUND_Y - s.y - body.h / 2, 10, '#f4b942', Math.random, 110));
+      this.spawn(sparkle(DINO_SCREEN_X + body.w / 2, GROUND_Y - s.y - body.h / 2, 10, '#bfe0ff', Math.random, 110));
       this.handlers.onEgg(s.eggs.length, s.stage.eggs.length);
     }
     // ぎりぎりで越えた

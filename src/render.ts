@@ -195,8 +195,8 @@ export interface DrawOptions {
 
 const MEAT_COLOR = '#c8553d';
 const MEAT_BONE = '#ffe3bd';
-const EGG_GOLD = '#f4b942';
-const EGG_SHINE = '#fff1a8';
+const EGG_WHITE = '#ffffff';
+const EGG_SHADE = '#c9d3e3';
 
 export function drawScene(c: CanvasRenderingContext2D, width: number, state: GameState, theme: Theme, opts: DrawOptions): void {
   const s0 = width / VIEW_W;
@@ -228,7 +228,7 @@ export function drawScene(c: CanvasRenderingContext2D, width: number, state: Gam
     const x = DINO_SCREEN_X + (egg.x - d);
     if (x > VIEW_W || x + EGG_W < -4) return;
     const bob = Math.round(Math.sin(state.frame / 9 + i * 1.7) * 2);
-    sprite(p, EGG, x, GROUND_Y - egg.y - EGG_H + bob, EGG_GOLD, EGG_SHINE, theme.dino);
+    sprite(p, EGG, x, GROUND_Y - egg.y - EGG_H + bob, EGG_WHITE, EGG_SHADE, theme.dino);
   });
 
   // 肉(まだ取っていないものだけ。たまごと同じように、ゆらゆら上下する)

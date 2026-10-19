@@ -51,12 +51,15 @@ function renderToggles(): void {
 const progressKey = (id: CharacterId): string => (id === 'dino' ? 'progress' : `progress-${id}`);
 const loadProgressOf = (id: CharacterId): Progress => sanitizeProgress(load<unknown>(progressKey(id), null), STAGES.length);
 
-/** デバッグモード: アドレスの終わりに ?debug を付けて開く。ちびダイノと全ステージを、クリアしなくても選べる(見た目や操作感を試すため。記録の保存の形は変わらない) */
-const DEBUG = new URLSearchParams(location.search).has('debug') || (window as { __DEBUG__?: boolean }).__DEBUG__ === true;
-const stageOpen = (p: Progress, id: number): boolean => DEBUG || isUnlocked(p, id);
+/**
+ * デバッグモード(隠しコマンド): タイトル画面のバージョン表示を、すばやく 7 回タップするとオン/オフ。
+ * ちびダイノと全ステージを、クリアしなくても選べる(見た目や操作感を試すため)。バックアップには入れない。
+ */
+let debug = load<boolean>('debug', false) === true;
+const stageOpen = (p: Progress, id: number): boolean => debug || isUnlocked(p, id);
 
 /** ちびダイノは、ダイノで全ステージをクリアすると遊べる */
-const isUnlockedChar = (id: CharacterId): boolean => DEBUG || isCharacterUnlocked(id, loadProgressOf('dino').cleared.length, STAGES.length);
+const isUnlockedChar = (id: CharacterId): boolean => debug || isCharacterUnlocked(id, loadProgressOf('dino').cleared.length, STAGES.length);
 
 let character: CharacterId = (() => {
   const saved = sanitizeCharacterId(load<unknown>('character', 'dino'));
@@ -107,7 +110,7 @@ const starText = (n: number): string => '★'.repeat(n) + '☆'.repeat(3 - n);
 
 function renderStageList(): void {
   renderCharacters();
-  $('debug-note').hidden = !DEBUG;
+  $('debug-note').hidden = !debug;
   const list = $('stage-list');
   list.replaceChildren();
   for (const stage of STAGES) {
@@ -478,6 +481,25 @@ $<HTMLInputElement>('backup-import').addEventListener('change', async (e) => {
 });
 
 $('version').textContent = __APP_VERSION__;
+
+// 隠しコマンド: バージョン表示を 3 秒以内に 7 回タップ → デバッグモードのオン/オフ
+const SECRET_TAPS = 7;
+let taps: number[] = [];
+$('version').parentElement?.addEventListener('click', () => {
+  const now = Date.now();
+  taps = [...taps.filter((t) => now - t < 3000), now];
+  if (taps.length < SECRET_TAPS) return;
+  taps = [];
+  debug = !debug;
+  save('debug', debug);
+  if (!debug && !isUnlockedChar(character)) {
+    character = 'dino';
+    save('character', character);
+    progress = loadProgress();
+  }
+  renderStageList();
+  $('title-summary').textContent = debug ? 'デバッグモード: オン' : 'デバッグモード: オフ';
+});
 requestPersist();
 setupUpdateBanner($('update-banner'), $('update-button'));
 setupInstallGuide($<HTMLButtonElement>('install-open'), $<HTMLDialogElement>('install-dialog'), $<HTMLButtonElement>('install-now'));
