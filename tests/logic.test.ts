@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DT, BOOST_FRAMES, BOOST_MAX, BOOST_RAMP, BOOST_STEP, BUFFER_FRAMES, DINO_W, MEAT_PICKUP, MEAT_W, MULT_STEP, approachFactor, boostTarget, scoreMultiplier, FPS, JUMP_V, distanceAt, goalFrame, hits, newGame, step, stepBody, touchesEgg, touchesMeat, trackNearMiss, progressPercent, NEAR_MISS_PX, type GameState, type Input, type StageDef,
+  DT, BOOST_FRAMES, BOOST_MAX, BOOST_RAMP, BOOST_STEP, BUFFER_FRAMES, DINO_W, HIT_INSET, MEAT_PICKUP, MEAT_W, MULT_STEP, approachFactor, boostTarget, scoreMultiplier, FPS, JUMP_V, distanceAt, goalFrame, hits, newGame, step, stepBody, touchesEgg, touchesMeat, trackNearMiss, progressPercent, NEAR_MISS_PX, type GameState, type Input, type StageDef,
 } from '../src/logic';
 
 const NONE: Input = { pressed: false, held: false };
@@ -351,7 +351,15 @@ describe('当たり判定', () => {
 
   it('margin を大きくすると、判定が厳しくなる', () => {
     const o = [{ kind: 'S' as const, x: 100, w: 14, h: 26 }];
-    expect(hits(o, 100 - DINO_W - 2, 0, 0)).toBe(false);
-    expect(hits(o, 100 - DINO_W - 2, 0, 3)).toBe(true);
+    expect(hits(o, 100 - DINO_W + HIT_INSET - 2, 0, 0)).toBe(false);
+    expect(hits(o, 100 - DINO_W + HIT_INSET - 2, 0, 3)).toBe(true);
+  });
+
+  it('恐竜の左右は HIT_INSET だけせまく判定する(ほんの少しかすっても当たらない)', () => {
+    const o = [{ kind: 'S' as const, x: 100, w: 14, h: 26 }];
+    expect(hits(o, 100 - DINO_W + HIT_INSET, 0)).toBe(false);
+    expect(hits(o, 100 - DINO_W + HIT_INSET + 1, 0)).toBe(true);
+    expect(hits(o, 100 + 14 - HIT_INSET, 0)).toBe(false);
+    expect(hits(o, 100 + 14 - HIT_INSET - 1, 0)).toBe(true);
   });
 });

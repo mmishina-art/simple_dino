@@ -8,6 +8,8 @@ export const DT = 1 / FPS;
 /** 恐竜の当たり判定(見た目より少し小さくして、理不尽に感じにくくする) */
 export const DINO_W = 20;
 export const DINO_H = 24;
+/** 障害物との当たり判定だけ、恐竜の左右をこれだけ(px)せまくする。ぎりぎりでぶつかる理不尽さを減らす(たまご・肉を取る範囲は変えない) */
+export const HIT_INSET = 3;
 
 /** ジャンプの初速。上昇中にボタンを押し続けると重力が弱まり、高く跳べる(離すと低く短いジャンプ) */
 export const JUMP_V = 560;
@@ -188,7 +190,7 @@ export function goalFrame(stage: StageDef): number {
 /** 恐竜(左端 dx・高さ y)が障害物に当たっているか。margin を正にすると判定が厳しくなる(テストで余裕を測るため) */
 export function hits(obstacles: readonly Obstacle[], dx: number, y: number, margin = 0): boolean {
   for (const o of obstacles) {
-    if (dx + DINO_W > o.x - margin && dx < o.x + o.w + margin && y < o.h + margin) return true;
+    if (dx + DINO_W - HIT_INSET > o.x - margin && dx + HIT_INSET < o.x + o.w + margin && y < o.h + margin) return true;
   }
   return false;
 }
