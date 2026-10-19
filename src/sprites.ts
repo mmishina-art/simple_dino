@@ -33,9 +33,38 @@ export const DINO = {
   dead: [...DINO_DEAD_BODY, ...LEGS.stand],
 } as const satisfies Record<string, Sprite>;
 
-/** 着地でつぶれた姿: 体の 1 行を抜いて、1 マス低くする */
-export function squashed(sprite: Sprite): Sprite {
-  return sprite.filter((_, i) => i !== 9);
+/**
+ * ちびダイノ(小さくて速い): ダイノを縮めて、頭を大きく(7 マス幅)し、口(あいたくち)をつけた絵。11 × 10 マス(22 × 20 px)。
+ * 色はダイノと同じ 1 色。目と口は、穴で表す。絵は当たり判定(14 × 16)より少し大きいが、判定は絵の足もとの中央にあり、絵とは別。
+ */
+const CHIBI_BODY: Sprite = [
+  '.....#####.',
+  '....#######',
+  '....##.####',
+  '....####...',
+  '....#######',
+  '#...#####..',
+  '##.#######.',
+  '.########..',
+];
+/** やられた顔: 目が × のようになる */
+const CHIBI_DEAD_BODY: Sprite = CHIBI_BODY.map((row, i) => (i === 2 ? '....#.#.###' : row));
+const CHIBI_LEGS = {
+  stand: ['..##..##...', '..##..##...'],
+  runA: ['..##..##...', '..##.......'],
+  runB: ['..##..##...', '......##...'],
+} as const;
+
+export const DINO_CHIBI = {
+  stand: [...CHIBI_BODY, ...CHIBI_LEGS.stand],
+  runA: [...CHIBI_BODY, ...CHIBI_LEGS.runA],
+  runB: [...CHIBI_BODY, ...CHIBI_LEGS.runB],
+  dead: [...CHIBI_DEAD_BODY, ...CHIBI_LEGS.stand],
+} as const satisfies Record<string, Sprite>;
+
+/** 着地でつぶれた姿: 体の 1 行(row 行め)を抜いて、1 マス低くする */
+export function squashed(sprite: Sprite, row = 9): Sprite {
+  return sprite.filter((_, i) => i !== row);
 }
 
 interface Arm {

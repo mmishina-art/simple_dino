@@ -1,9 +1,9 @@
 // Canvas への描画。ゲームの状態(GameState)を絵にするだけで、ルールには触れない。
 // 座標は論理 px(横 VIEW_W × 縦 VIEW_H)。実際の画面の大きさに合わせて、scale 倍で描く。
 // ドット絵がにじまないよう、四角は端末の px にそろえて塗る。
-import { DINO_W, EGG_H, EGG_W, MEAT_H, MEAT_W, type GameState, type ObstacleKind } from './logic';
+import { DINO_BODY, EGG_H, EGG_W, MEAT_H, MEAT_W, bodyOf, type GameState, type ObstacleKind } from './logic';
 import type { Particle, Popup } from './fx';
-import { DINO, EGG, MEAT, SPRITES, squashed, type Sprite } from './sprites';
+import { DINO, DINO_CHIBI, EGG, MEAT, SPRITES, squashed, type Sprite } from './sprites';
 import { THEMES, type Theme } from './themes';
 
 export const VIEW_W = 400;
@@ -247,13 +247,17 @@ export function drawScene(c: CanvasRenderingContext2D, width: number, state: Gam
     else rect(p, x + 8, top - 6, 3, 3, spark);
   });
 
-  // 恐竜(当たり判定は絵より少し小さく、絵の中央にある)
-  let dino: Sprite = DINO.stand;
-  if (state.status === 'dead') dino = DINO.dead;
-  else if (state.grounded) dino = Math.floor(state.frame / 5) % 2 === 0 ? DINO.runA : DINO.runB;
-  const drawn = opts.squash && state.grounded && state.status === 'running' ? squashed(dino) : dino;
-  const x = DINO_SCREEN_X - (dino[0].length * CELL - DINO_W) / 2;
-  sprite(p, drawn, x, GROUND_Y - state.y - drawn.length * CELL, theme.dino);
+  // 恐竜(当たり判定は絵より少し小さく、絵の中央にある)。判定がダイノより小さいときは、ちびダイノの絵
+  const body = bodyOf(stage);
+  const chibi = body.w < DINO_BODY.w;
+  const set = chibi ? DINO_CHIBI : DINO;
+  let dino: Sprite = set.stand;
+  if (state.status === 'dead') dino = set.dead;
+  else if (state.grounded) dino = Math.floor(state.frame / 5) % 2 === 0 ? set.runA : set.runB;
+  const drawn = opts.squash && state.grounded && state.status === 'running' ? squashed(dino, chibi ? 6 : 9) : dino;
+  const x = DINO_SCREEN_X - (dino[0].length * CELL - body.w) / 2;
+  const top = GROUND_Y - state.y - drawn.length * CELL;
+  sprite(p, drawn, x, top, theme.dino);
 
   // 速さの線(肉のレベルが高いほど、多く、長く、速く流れる)
   const level = opts.speedLines ?? 0;

@@ -1,5 +1,6 @@
 import './style.css';
 import { startEnding, startTitle } from './ending';
+import { CHARACTERS, characterById, forCharacter, isCharacterUnlocked, sanitizeCharacterId, type CharacterId } from './characters';
 import { createEndless } from './endless';
 import { scoreMultiplier } from './logic';
 import { Player } from './play';
@@ -46,12 +47,57 @@ function renderToggles(): void {
 
 // ---- 進み具合の保存 ----
 
-const loadProgress = (): Progress => sanitizeProgress(load<unknown>('progress', null), STAGES.length);
+/** キャラごとに、記録は別。ダイノは今までのキー(progress)のまま(キー名を変えると記録が消える) */
+const progressKey = (id: CharacterId): string => (id === 'dino' ? 'progress' : `progress-${id}`);
+const loadProgressOf = (id: CharacterId): Progress => sanitizeProgress(load<unknown>(progressKey(id), null), STAGES.length);
+
+/** デバッグモード: アドレスの終わりに ?debug を付けて開く。ちびダイノと全ステージを、クリアしなくても選べる(見た目や操作感を試すため。記録の保存の形は変わらない) */
+const DEBUG = new URLSearchParams(location.search).has('debug') || (window as { __DEBUG__?: boolean }).__DEBUG__ === true;
+const stageOpen = (p: Progress, id: number): boolean => DEBUG || isUnlocked(p, id);
+
+/** ちびダイノは、ダイノで全ステージをクリアすると遊べる */
+const isUnlockedChar = (id: CharacterId): boolean => DEBUG || isCharacterUnlocked(id, loadProgressOf('dino').cleared.length, STAGES.length);
+
+let character: CharacterId = (() => {
+  const saved = sanitizeCharacterId(load<unknown>('character', 'dino'));
+  return isUnlockedChar(saved) ? saved : 'dino';
+})();
+const loadProgress = (): Progress => loadProgressOf(character);
 let progress = loadProgress();
 
 function updateProgress(next: Progress): void {
   progress = next;
-  save('progress', progress);
+  save(progressKey(character), progress);
+}
+
+function setCharacter(id: CharacterId): void {
+  if (!isUnlockedChar(id)) return;
+  character = id;
+  save('character', id);
+  progress = loadProgress();
+  renderStageList();
+}
+
+function renderCharacters(): void {
+  const box = $('character-picker');
+  box.replaceChildren();
+  for (const c of CHARACTERS) {
+    const open = isUnlockedChar(c.id);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.disabled = !open;
+    button.setAttribute('aria-pressed', String(open && c.id === character));
+    button.setAttribute('aria-label', open ? `${c.name}(${c.note})` : `${c.name}。ぜんぶのステージをクリアすると遊べます`);
+    const name = document.createElement('span');
+    name.textContent = open ? c.name : `🔒 ${c.name}`;
+    const note = document.createElement('small');
+    note.className = 'muted';
+    note.setAttribute('aria-hidden', 'true');
+    note.textContent = open ? c.note : 'ぜんぶクリアで解放';
+    button.append(name, note);
+    button.addEventListener('click', () => setCharacter(c.id));
+    box.append(button);
+  }
 }
 
 // ---- ステージ選択 ----
@@ -60,10 +106,12 @@ function updateProgress(next: Progress): void {
 const starText = (n: number): string => '★'.repeat(n) + '☆'.repeat(3 - n);
 
 function renderStageList(): void {
+  renderCharacters();
+  $('debug-note').hidden = !DEBUG;
   const list = $('stage-list');
   list.replaceChildren();
   for (const stage of STAGES) {
-    const unlocked = isUnlocked(progress, stage.id);
+    const unlocked = stageOpen(progress, stage.id);
     const cleared = isCleared(progress, stage.id);
     const li = document.createElement('li');
     const button = document.createElement('button');
@@ -92,7 +140,9 @@ function renderStageList(): void {
   const done = allCleared(progress, STAGES.length);
   const stars = `★ ${totalStars(progress, STAGES.map((s) => s.eggs.length))}/${STAGES.length * 3}`;
   $('progress-summary').textContent = done ? `★ ぜんぶクリア! (${STAGES.length}/${STAGES.length}) ・ ${stars}` : `クリア ${progress.cleared.length}/${STAGES.length} ・ ${stars}`;
-  $('ending-open').hidden = !done;
+  $('ending-open').hidden = !done || character !== 'dino';
+  // エンドレスは、ダイノだけ(速さを、ステージごとに決めているため)
+  $('endless-open').hidden = character !== 'dino';
   $('endless-best').textContent = progress.endlessBest > 0 ? `ハイスコア ${progress.endlessBest} 点` : 'ハイスコアなし';
   $('title-summary').textContent = progress.cleared.length > 0 ? `つづき: ${done ? '★ ぜんぶクリア!' : `クリア ${progress.cleared.length}/${STAGES.length}`}` : '';
 }
@@ -166,7 +216,7 @@ const player = new Player(
       const next = STAGES.find((s) => s.id === current.id + 1);
       const last = current.id === STAGES.length;
       status.textContent = `ステージクリア。ほし${stars}つ。たまごは${current.eggs.length}個中${eggs.length}個`;
-      if (last && allCleared(progress, STAGES.length) && !progress.endingSeen) {
+      if (last && character === 'dino' && allCleared(progress, STAGES.length) && !progress.endingSeen) {
         updateProgress(markEndingSeen(progress));
         openEnding();
         return;
@@ -177,6 +227,7 @@ const player = new Player(
       if (stars === 1) lines.push('たまごを全部取ると ★2');
       else if (stars === 2) lines.push('1回で全部取ると ★3');
       if (first && next) lines.push(`ステージ${next.id}が遊べるようになった`);
+      if (first && last && character === 'dino') lines.push('ちびダイノが遊べるようになった!');
       showOverlay('ステージクリア!', lines.join('\n'), [
         ...(next ? [{ label: 'つぎのステージ', primary: true, run: () => openStage(next) }] : []),
         ...(last && allCleared(progress, STAGES.length) ? [{ label: 'エンディング', primary: true, run: () => openEnding() }] : []),
@@ -236,12 +287,13 @@ function hideOverlay(): void {
   pad.hidden = false;
 }
 
-function openStage(stage: StageDef): void {
-  if (!isUnlocked(progress, stage.id)) return;
+function openStage(base: StageDef): void {
+  if (!stageOpen(progress, base.id)) return;
+  const stage = forCharacter(base, characterById(character));
   current = stage;
   show(game);
   game.classList.remove('endless');
-  $('game-title').textContent = `ステージ${stage.id} ${stage.name}`;
+  $('game-title').textContent = `ステージ${stage.id} ${stage.name}${character === 'dino' ? '' : '🐣'}`;
   renderBest();
   hideOverlay();
   hint.hidden = false;
@@ -314,7 +366,7 @@ function openEnding(): void {
   hideOverlay();
   show(ending);
   setScene('ending', { restart: true, delay: 1.4 });
-  $('ending-stats').textContent = `ぜんぶで ${totalAttempts(progress)} 回、挑戦しました`;
+  $('ending-stats').textContent = `ぜんぶで ${totalAttempts(progress)} 回、挑戦しました\nちびダイノが仲間になった! ステージ選択でえらべます`;
   stopEnding?.();
   stopEnding = startEnding($<HTMLCanvasElement>('ending-canvas'));
   sfx('clear');
@@ -414,6 +466,7 @@ $<HTMLInputElement>('backup-import').addEventListener('change', async (e) => {
     const n = importBackup(await file.text());
     syncSound();
     syncMusic();
+    character = isUnlockedChar(sanitizeCharacterId(load<unknown>('character', 'dino'))) ? sanitizeCharacterId(load<unknown>('character', 'dino')) : 'dino';
     progress = loadProgress();
     renderToggles();
     renderStageList();

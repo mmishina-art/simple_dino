@@ -11,6 +11,13 @@ export const DT = 1 / FPS;
 export const DINO_W = 20;
 export const DINO_H = 24;
 
+/** 恐竜の当たり判定の大きさ(キャラによって変わる) */
+export interface Body {
+  w: number;
+  h: number;
+}
+export const DINO_BODY: Body = { w: DINO_W, h: DINO_H };
+
 /** ジャンプの初速。上昇中にボタンを押し続けると重力が弱まり、高く跳べる(離すと低く短いジャンプ) */
 export const JUMP_V = 560;
 export const GRAVITY_HOLD = 1400;
@@ -113,6 +120,8 @@ export interface StageDef {
   meats?: Meat[];
   /** エンドレスモード(ゴールがなく、障害物をそのつど作り足す) */
   endless?: boolean;
+  /** 恐竜の当たり判定の大きさ。なければ DINO_BODY(キャラによって変える: src/characters.ts) */
+  body?: Body;
   /** 走った距離に応じた速さ(px/秒)。なければ speed のまま。エンドレスは、だんだん速くなる */
   speedAt?: (dist: number) => number;
   /** 走った距離に応じた背景の番号(THEMES の何番目か)。なければ、ステージの番号で決まる */
@@ -122,6 +131,9 @@ export interface StageDef {
 }
 
 /** 恐竜の前に、これだけ先(px)まで、障害物を用意しておく */
+/** そのステージの、恐竜の当たり判定の大きさ */
+export const bodyOf = (stage: StageDef): Body => stage.body ?? DINO_BODY;
+
 export const EXTEND_AHEAD = 1400;
 
 export type Status = 'running' | 'dead' | 'cleared';
@@ -183,16 +195,17 @@ export const NEAR_MISS_PX = 10;
  */
 export function trackNearMiss(minClear: Map<number, number>, s: GameState): number[] {
   const dx = s.dist;
+  const w = bodyOf(s.stage).w;
   const passed: number[] = [];
   s.stage.obstacles.forEach((o, i) => {
-    if (o.x > dx + DINO_W + 4) return;
+    if (o.x > dx + w + 4) return;
     if (dx >= o.x + o.w) {
       const gap = minClear.get(i);
       if (gap !== undefined) {
         minClear.delete(i);
         if (gap >= 0 && gap < NEAR_MISS_PX) passed.push(i);
       }
-    } else if (dx + DINO_W > o.x) {
+    } else if (dx + w > o.x) {
       minClear.set(i, Math.min(minClear.get(i) ?? Infinity, s.y - o.h));
     }
   });
@@ -205,9 +218,9 @@ export function goalFrame(stage: StageDef): number {
 }
 
 /** 恐竜(左端 dx・高さ y)が障害物に当たっているか。margin を正にすると判定が厳しくなる(テストで余裕を測るため) */
-export function hits(obstacles: readonly Obstacle[], dx: number, y: number, margin = 0): boolean {
+export function hits(obstacles: readonly Obstacle[], dx: number, y: number, margin = 0, width = DINO_W): boolean {
   const left = dx;
-  const right = dx + DINO_W;
+  const right = dx + width;
   for (const o of obstacles) {
     // まず、四角(外側)で大まかに判定する
     if (!(right > o.x - margin && left < o.x + o.w + margin && y < o.h + margin)) continue;
@@ -225,15 +238,15 @@ export function hits(obstacles: readonly Obstacle[], dx: number, y: number, marg
 }
 
 /** 恐竜(左端 dx・高さ y)が、たまごを取れる位置か。shrink を正にすると取る範囲がせまくなる(テストで余裕を測るため) */
-export function touchesEgg(egg: Egg, dx: number, y: number, shrink = 0): boolean {
+export function touchesEgg(egg: Egg, dx: number, y: number, shrink = 0, body: Body = DINO_BODY): boolean {
   const pad = EGG_PICKUP - shrink;
-  return dx + DINO_W > egg.x - pad && dx < egg.x + EGG_W + pad && y + DINO_H > egg.y - pad && y < egg.y + EGG_H + pad;
+  return dx + body.w > egg.x - pad && dx < egg.x + EGG_W + pad && y + body.h > egg.y - pad && y < egg.y + EGG_H + pad;
 }
 
 /** 恐竜(左端 dx・高さ y)が、肉を取れる位置か(たまごと同じ考え方) */
-export function touchesMeat(meat: Meat, dx: number, y: number, shrink = 0): boolean {
+export function touchesMeat(meat: Meat, dx: number, y: number, shrink = 0, body: Body = DINO_BODY): boolean {
   const pad = MEAT_PICKUP - shrink;
-  return dx + DINO_W > meat.x - pad && dx < meat.x + MEAT_W + pad && y + DINO_H > meat.y - pad && y < meat.y + MEAT_H + pad;
+  return dx + body.w > meat.x - pad && dx < meat.x + MEAT_W + pad && y + body.h > meat.y - pad && y < meat.y + MEAT_H + pad;
 }
 
 /** 空中の動き 1 ステップ(縦方向だけ) */
@@ -282,11 +295,12 @@ export function step(s: GameState, input: Input): GameState {
   const dx = s.stage.speedAt ? s.dist + s.stage.speedAt(s.dist) * factor * DT : distanceAt(s.stage, frame);
   s.stage.extend?.(dx + EXTEND_AHEAD);
   let status: Status = 'running';
-  if (hits(s.stage.obstacles, dx, y)) status = 'dead';
+  const body = bodyOf(s.stage);
+  if (hits(s.stage.obstacles, dx, y, 0, body.w)) status = 'dead';
   else if (dx >= s.stage.length) status = 'cleared';
   let eggs = s.eggs;
   if (status !== 'dead') {
-    const got = s.stage.eggs.flatMap((egg, i) => (!eggs.includes(i) && touchesEgg(egg, dx, y) ? [i] : []));
+    const got = s.stage.eggs.flatMap((egg, i) => (!eggs.includes(i) && touchesEgg(egg, dx, y, 0, body) ? [i] : []));
     if (got.length > 0) eggs = [...eggs, ...got];
   }
 
@@ -301,8 +315,8 @@ export function step(s: GameState, input: Input): GameState {
   if (allMeats && status !== 'dead') {
     for (let i = 0; i < allMeats.length; i++) {
       const m = allMeats[i];
-      if (m.x > dx + DINO_W + MEAT_PICKUP) break;
-      if (m.x + MEAT_W < dx - MEAT_PICKUP || !touchesMeat(m, dx, y) || meats.includes(i)) continue;
+      if (m.x > dx + body.w + MEAT_PICKUP) break;
+      if (m.x + MEAT_W < dx - MEAT_PICKUP || !touchesMeat(m, dx, y, 0, body) || meats.includes(i)) continue;
       meats = [...meats, i];
       boost = Math.min(BOOST_MAX, boost + 1);
       boostLeft = BOOST_FRAMES;
