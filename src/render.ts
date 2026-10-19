@@ -44,6 +44,16 @@ function sprite(p: Pen, sp: Sprite, x: number, y: number, main: string, accent =
   }
 }
 
+/** 文字ごとに色を決めて描く(ちびダイノ用)。palette にない文字(.)は透明 */
+function spritePalette(p: Pen, sp: Sprite, x: number, y: number, palette: Readonly<Record<string, string>>): void {
+  for (let r = 0; r < sp.length; r++) {
+    for (let k = 0; k < sp[r].length; k++) {
+      const color = palette[sp[r][k]];
+      if (color) rect(p, x + k * CELL, y + r * CELL, CELL, CELL, color);
+    }
+  }
+}
+
 /** 色の明るさ(0 暗い 〜 1 明るい) */
 function luma(hex: string): number {
   const n = (i: number): number => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
@@ -193,6 +203,7 @@ export interface DrawOptions {
   speedLines?: number;
 }
 
+const CHIBI_COLORS = { '#': '#9fdca8', o: '#f08a8a', e: '#2b2a24', w: '#ffffff' } as const;
 const MEAT_COLOR = '#c8553d';
 const MEAT_BONE = '#ffe3bd';
 const EGG_GOLD = '#f4b942';
@@ -254,9 +265,11 @@ export function drawScene(c: CanvasRenderingContext2D, width: number, state: Gam
   let dino: Sprite = set.stand;
   if (state.status === 'dead') dino = set.dead;
   else if (state.grounded) dino = Math.floor(state.frame / 5) % 2 === 0 ? set.runA : set.runB;
-  const drawn = opts.squash && state.grounded && state.status === 'running' ? squashed(dino, chibi ? 5 : 9) : dino;
+  const drawn = opts.squash && state.grounded && state.status === 'running' ? squashed(dino, chibi ? 6 : 9) : dino;
   const x = DINO_SCREEN_X - (dino[0].length * CELL - body.w) / 2;
-  sprite(p, drawn, x, GROUND_Y - state.y - drawn.length * CELL, theme.dino);
+  const top = GROUND_Y - state.y - drawn.length * CELL;
+  if (chibi) spritePalette(p, drawn, x, top, { ...CHIBI_COLORS, k: theme.dino });
+  else sprite(p, drawn, x, top, theme.dino);
 
   // 速さの線(肉のレベルが高いほど、多く、長く、速く流れる)
   const level = opts.speedLines ?? 0;

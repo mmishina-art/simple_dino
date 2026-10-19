@@ -53,12 +53,15 @@ describe('キャラ', () => {
     expect(touchesEgg(egg, 100, 100, 0, chibi.body)).toBe(false);
   });
 
-  it('ちびダイノの絵は、判定(14×16)にあう小ささ', () => {
+  it('ちびダイノの絵は、判定(14×16)より少し大きくてよい。判定は足もとの中央にあり、絵の大きさとは別', () => {
     for (const k of ['stand', 'runA', 'runB', 'dead'] as const) {
-      expect(DINO_CHIBI[k].length * 2).toBe(chibi.body.h);
-      expect(DINO_CHIBI[k][0].length * 2).toBeGreaterThanOrEqual(chibi.body.w);
-      expect(DINO_CHIBI[k][0].length).toBeLessThan(DINO[k][0].length);
-      expect(new Set(DINO_CHIBI[k].map((r) => r.length)).size).toBe(1);
+      const rows = DINO_CHIBI[k];
+      expect(rows.length * 2).toBeGreaterThanOrEqual(chibi.body.h);
+      expect(rows[0].length * 2).toBeGreaterThanOrEqual(chibi.body.w);
+      expect(rows[0].length).toBeLessThanOrEqual(DINO[k][0].length);
+      expect(new Set(rows.map((r) => r.length)).size).toBe(1);
+      // 足が地面につく(いちばん下の行に、足のふちがある)
+      expect(rows[rows.length - 1]).toMatch(/[k#]/);
     }
   });
 });

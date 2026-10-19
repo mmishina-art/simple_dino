@@ -33,20 +33,28 @@ export const DINO = {
   dead: [...DINO_DEAD_BODY, ...LEGS.stand],
 } as const satisfies Record<string, Sprite>;
 
-/** ちびダイノ(小さくて速い): ダイノを縮めた絵。10 × 8 マス(20 × 16 px) */
+/**
+ * ちびダイノ(小さくて速い): 頭が大きく、ほっぺのある、丸い絵。12 × 11 マス(24 × 22 px)。
+ * k = ふちどり(ステージごとの恐竜の色)、# = からだ(うすい緑)、o = ほっぺ、e = め、w = おなか・目のきらり(おなかは白)。
+ * 絵は当たり判定(14 × 16)より少し大きいが、当たり判定は絵の足もとの中央にあり、絵とは別。
+ */
 const CHIBI_BODY: Sprite = [
-  '......###.',
-  '.....#####',
-  '.....#.###',
-  '#...######',
-  '##.#####..',
-  '.#######..',
+  '....k.k.k...',
+  '...kkkkkkkk.',
+  '..k########k',
+  '..k####ew##k',
+  '..k####ee##k',
+  '..k###oo###k',
+  '.kk########k',
+  'k#k#wwwww##k',
+  '.kk#wwwww#k.',
 ];
-const CHIBI_DEAD_BODY: Sprite = CHIBI_BODY.map((row, i) => (i === 1 ? '.....#.#.#' : i === 2 ? '.....#####' : row));
+/** やられた顔: 目が × のようになる */
+const CHIBI_DEAD_BODY: Sprite = CHIBI_BODY.map((row, i) => (i === 3 ? '..k###e#e##k' : i === 4 ? '..k####e###k' : row));
 const CHIBI_LEGS = {
-  stand: ['..##.##...', '..##.##...'],
-  runA: ['..##.##...', '..##......'],
-  runB: ['..##.##...', '.....##...'],
+  stand: ['....k#k.k#k.', '....kkk.kkk.'],
+  runA: ['....k#k.....', '....kkk.....'],
+  runB: ['....k#k.k#k.', '........kkk.'],
 } as const;
 
 export const DINO_CHIBI = {
