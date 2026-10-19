@@ -2,14 +2,14 @@
 // 時間は 1/60 秒の固定ステップ(画面のリフレッシュレートに左右されない)。距離・高さの単位は論理 px。
 // 恐竜は自動で右へ走り続け(距離は経過フレームから決まる)、ジャンプだけが操作。
 
+import { SPRITES } from './sprites';
+
 export const FPS = 60;
 export const DT = 1 / FPS;
 
 /** 恐竜の当たり判定(見た目より少し小さくして、理不尽に感じにくくする) */
 export const DINO_W = 20;
 export const DINO_H = 24;
-/** 障害物との当たり判定だけ、恐竜の左右をこれだけ(px)せまくする。ぎりぎりでぶつかる理不尽さを減らす(たまご・肉を取る範囲は変えない) */
-export const HIT_INSET = 3;
 
 /** ジャンプの初速。上昇中にボタンを押し続けると重力が弱まり、高く跳べる(離すと低く短いジャンプ) */
 export const JUMP_V = 560;
@@ -27,6 +27,23 @@ export const OBSTACLE_SIZES: Record<ObstacleKind, { w: number; h: number }> = {
   R: { w: 26, h: 20 },
   T: { w: 28, h: 64 },
 };
+
+/**
+ * 障害物の当たり判定は、絵の輪郭(シルエット)に合わせる。絵の 1 マス(2px)ごとの列について「地面からその列のてっぺんまでの高さ」を持つ。
+ * 角のとがった四角ではなく、丸い岩の肩やサボテンの腕の上は、実際に絵がある高さまでしか当たらない。
+ */
+const CELL_PX = 2;
+const PROFILES: Record<ObstacleKind, readonly number[]> = (() => {
+  const result = {} as Record<ObstacleKind, readonly number[]>;
+  for (const kind of Object.keys(SPRITES) as ObstacleKind[]) {
+    const rows = SPRITES[kind];
+    result[kind] = Array.from({ length: rows[0].length }, (_, col) => {
+      const top = rows.findIndex((row) => row[col] !== '.');
+      return top < 0 ? 0 : (rows.length - top) * CELL_PX;
+    });
+  }
+  return result;
+})();
 
 export interface Obstacle {
   kind: ObstacleKind;
@@ -189,8 +206,20 @@ export function goalFrame(stage: StageDef): number {
 
 /** 恐竜(左端 dx・高さ y)が障害物に当たっているか。margin を正にすると判定が厳しくなる(テストで余裕を測るため) */
 export function hits(obstacles: readonly Obstacle[], dx: number, y: number, margin = 0): boolean {
+  const left = dx;
+  const right = dx + DINO_W;
   for (const o of obstacles) {
-    if (dx + DINO_W - HIT_INSET > o.x - margin && dx + HIT_INSET < o.x + o.w + margin && y < o.h + margin) return true;
+    // まず、四角(外側)で大まかに判定する
+    if (!(right > o.x - margin && left < o.x + o.w + margin && y < o.h + margin)) continue;
+    const profile = PROFILES[o.kind];
+    if (profile.length * CELL_PX !== o.w) return true;
+    // 絵の列ごとに、その列のてっぺんより低ければ当たり
+    for (let k = 0; k < profile.length; k++) {
+      const h = profile[k];
+      if (h === 0 || y >= h + margin) continue;
+      const x0 = o.x + k * CELL_PX;
+      if (right > x0 - margin && left < x0 + CELL_PX + margin) return true;
+    }
   }
   return false;
 }
