@@ -51,8 +51,12 @@ function renderToggles(): void {
 const progressKey = (id: CharacterId): string => (id === 'dino' ? 'progress' : `progress-${id}`);
 const loadProgressOf = (id: CharacterId): Progress => sanitizeProgress(load<unknown>(progressKey(id), null), STAGES.length);
 
+/** デバッグモード: アドレスの終わりに ?debug を付けて開く。ちびダイノと全ステージを、クリアしなくても選べる(見た目や操作感を試すため。記録の保存の形は変わらない) */
+const DEBUG = new URLSearchParams(location.search).has('debug') || (window as { __DEBUG__?: boolean }).__DEBUG__ === true;
+const stageOpen = (p: Progress, id: number): boolean => DEBUG || isUnlocked(p, id);
+
 /** ちびダイノは、ダイノで全ステージをクリアすると遊べる */
-const isUnlockedChar = (id: CharacterId): boolean => isCharacterUnlocked(id, loadProgressOf('dino').cleared.length, STAGES.length);
+const isUnlockedChar = (id: CharacterId): boolean => DEBUG || isCharacterUnlocked(id, loadProgressOf('dino').cleared.length, STAGES.length);
 
 let character: CharacterId = (() => {
   const saved = sanitizeCharacterId(load<unknown>('character', 'dino'));
@@ -103,10 +107,11 @@ const starText = (n: number): string => '★'.repeat(n) + '☆'.repeat(3 - n);
 
 function renderStageList(): void {
   renderCharacters();
+  $('debug-note').hidden = !DEBUG;
   const list = $('stage-list');
   list.replaceChildren();
   for (const stage of STAGES) {
-    const unlocked = isUnlocked(progress, stage.id);
+    const unlocked = stageOpen(progress, stage.id);
     const cleared = isCleared(progress, stage.id);
     const li = document.createElement('li');
     const button = document.createElement('button');
@@ -283,7 +288,7 @@ function hideOverlay(): void {
 }
 
 function openStage(base: StageDef): void {
-  if (!isUnlocked(progress, base.id)) return;
+  if (!stageOpen(progress, base.id)) return;
   const stage = forCharacter(base, characterById(character));
   current = stage;
   show(game);

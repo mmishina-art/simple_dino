@@ -547,3 +547,22 @@ test('ちびダイノ: 全クリア前は鍵つき。全クリアすると選べ
   const saved = await page.evaluate((id) => localStorage.getItem(`${id}-character`), APP_ID);
   expect(saved).toBe('"chibi"');
 });
+
+test('デバッグモード(?debug): ちびダイノと全ステージを、クリアしなくても選べる。普通のアドレスでは、そうならない', async ({ page }) => {
+  await page.goto('/?debug');
+  await toSelect(page);
+  await expect(page.locator('#debug-note')).toBeVisible();
+  await expect(page.getByRole('button', { name: /ちびダイノ/ })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'ステージ10 ラスト' })).toBeEnabled();
+  await page.getByRole('button', { name: /ちびダイノ/ }).click();
+  await page.getByRole('button', { name: 'ステージ10 ラスト' }).click();
+  await expect(page.locator('#game-title')).toHaveText('ステージ10 ラスト🐣');
+
+  // ふつうのアドレスで開き直すと、もとにもどる(選んだキャラは、鍵つきなのでダイノ)
+  await page.goto('/');
+  await toSelect(page);
+  await expect(page.locator('#debug-note')).toBeHidden();
+  await expect(page.getByRole('button', { name: /ちびダイノ/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'ステージ10 ラスト' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^ダイノ/ })).toHaveAttribute('aria-pressed', 'true');
+});
