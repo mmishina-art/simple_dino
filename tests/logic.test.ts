@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DT, BOOST_FRAMES, BOOST_MAX, BOOST_RAMP, BOOST_STEP, BUFFER_FRAMES, DINO_W, HIT_INSET, MEAT_PICKUP, MEAT_W, MULT_STEP, approachFactor, boostTarget, scoreMultiplier, FPS, JUMP_V, distanceAt, goalFrame, hits, newGame, step, stepBody, touchesEgg, touchesMeat, trackNearMiss, progressPercent, NEAR_MISS_PX, type GameState, type Input, type StageDef,
+  DT, BOOST_FRAMES, BOOST_MAX, BOOST_RAMP, BOOST_STEP, BUFFER_FRAMES, DINO_W, MEAT_PICKUP, MEAT_W, MULT_STEP, approachFactor, boostTarget, scoreMultiplier, FPS, JUMP_V, distanceAt, goalFrame, hits, newGame, step, stepBody, touchesEgg, touchesMeat, trackNearMiss, progressPercent, NEAR_MISS_PX, type GameState, type Input, type StageDef,
 } from '../src/logic';
 
 const NONE: Input = { pressed: false, held: false };
@@ -351,15 +351,21 @@ describe('当たり判定', () => {
 
   it('margin を大きくすると、判定が厳しくなる', () => {
     const o = [{ kind: 'S' as const, x: 100, w: 14, h: 26 }];
-    expect(hits(o, 100 - DINO_W + HIT_INSET - 2, 0, 0)).toBe(false);
-    expect(hits(o, 100 - DINO_W + HIT_INSET - 2, 0, 3)).toBe(true);
+    expect(hits(o, 100 - DINO_W - 2, 0, 0)).toBe(false);
+    expect(hits(o, 100 - DINO_W - 2, 0, 3)).toBe(true);
   });
 
-  it('恐竜の左右は HIT_INSET だけせまく判定する(ほんの少しかすっても当たらない)', () => {
-    const o = [{ kind: 'S' as const, x: 100, w: 14, h: 26 }];
-    expect(hits(o, 100 - DINO_W + HIT_INSET, 0)).toBe(false);
-    expect(hits(o, 100 - DINO_W + HIT_INSET + 1, 0)).toBe(true);
-    expect(hits(o, 100 + 14 - HIT_INSET, 0)).toBe(false);
-    expect(hits(o, 100 + 14 - HIT_INSET - 1, 0)).toBe(true);
+  it('当たり判定は絵の輪郭に合わせる: 丸い岩の肩や、サボテンの腕の上は、絵がある高さまでしか当たらない', () => {
+    // 高い岩 T(幅 28・高さ 64)の左のはし: 上の角は丸く欠けているが、根元は幅いっぱいにある
+    const t = [{ kind: 'T' as const, x: 100, w: 28, h: 64 }];
+    const edge = 100 - DINO_W + 1; // 恐竜の前の端が、岩の左はしに 1px 入る
+    expect(hits(t, edge, 0)).toBe(true);
+    expect(hits(t, edge, 60)).toBe(false); // 肩(丸み)の外側は、てっぺんより低い
+    expect(hits(t, 100 + 14 - DINO_W / 2, 60)).toBe(true); // 真ん中は、てっぺんまである
+    // 小さいサボテン S(幅 14・高さ 26): 腕は幹より低い。腕の上(高さ 22)をかすっても当たらない
+    const s = [{ kind: 'S' as const, x: 100, w: 14, h: 26 }];
+    expect(hits(s, 100 - DINO_W + 1, 18)).toBe(true); // 左の腕(てっぺんの高さ 20)の中
+    expect(hits(s, 100 - DINO_W + 1, 22)).toBe(false); // 腕の上
+    expect(hits(s, 100 + 5 - DINO_W / 2, 24)).toBe(true); // 幹の上
   });
 });
