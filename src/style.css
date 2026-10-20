@@ -47,6 +47,7 @@ body {
 }
 
 main {
+  position: relative;
   max-width: 480px;
   margin: 0 auto;
   /* iPhone のノッチ・ホームバーを避ける */
@@ -150,7 +151,7 @@ button.link {
 }
 
 /* インストール方法のダイアログ */
-.install-dialog {
+.popup {
   width: min(448px, calc(100vw - 32px));
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
@@ -161,23 +162,23 @@ button.link {
   border-radius: 16px;
 }
 
-.install-dialog::backdrop {
+.popup::backdrop {
   background: rgb(0 0 0 / 0.5);
 }
 
-.install-dialog h2 {
+.popup h2 {
   font-size: 1.1rem;
   margin: 0 0 4px;
 }
 
-.install-dialog details {
+.popup details {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 4px 12px;
   margin: 8px 0;
 }
 
-.install-dialog summary {
+.popup summary {
   min-height: 44px;
   display: flex;
   align-items: center;
@@ -185,30 +186,22 @@ button.link {
   cursor: pointer;
 }
 
-.install-dialog ol {
+.popup ol {
   margin: 0 0 8px;
   padding-left: 1.4em;
 }
 
-.install-dialog button {
+.popup .file-button {
   display: block;
   width: 100%;
   margin: 8px 0 0;
+  text-align: center;
 }
 
-.backup {
-  margin-top: 16px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 4px 12px;
-  background: var(--surface);
-}
-
-.backup summary {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  cursor: pointer;
+.popup button {
+  display: block;
+  width: 100%;
+  margin: 8px 0 0;
 }
 
 .file-button {
@@ -431,7 +424,6 @@ button.link {
   align-items: center;
   gap: 8px;
   text-align: center;
-  position: relative;
 }
 
 .title-art {
@@ -439,25 +431,15 @@ button.link {
   align-self: stretch;
 }
 
-/* 音のボタンは、絵の右上に重ねる(場所をとらない) */
-.title-toggles {
+/* ロゴ(ドット調の画像)は、動く絵の上のほうに重ねる。大きめに、少し中心寄り(上から 14%。恐竜がいちばん高く跳んでも、ふれない高さ)に置く */
+.title-logo-img {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  display: flex;
-}
-
-.title-toggles .icon-button {
-  margin: 2px;
-  background: var(--surface);
-  border-radius: 12px;
-  opacity: 0.92;
-}
-
-.title-logo {
-  margin: 8px 0 0;
-  font-size: 2.2rem;
-  letter-spacing: 0.08em;
+  top: 14%;
+  left: 50%;
+  width: 74%;
+  height: auto;
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 
 .title-lead {
@@ -465,13 +447,19 @@ button.link {
 }
 
 .play-button {
-  min-width: 220px;
+  min-width: 190px;
   min-height: 56px;
   margin-top: 8px;
   font-size: 1.3rem;
 }
 
-.title-screen .backup,
+/* ステージ選択の下に並べるボタン(エンドレス・エンディング・バックアップ)は、同じ幅にそろえる */
+.wide {
+  display: block;
+  width: 100%;
+  margin: 8px 0 0;
+  min-height: 48px;
+}
 .title-screen .link {
   align-self: stretch;
 }
@@ -482,21 +470,46 @@ button.link {
 
 .select-title {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+#screen-select .header button {
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding-inline: 12px;
 }
 
 #screen-select .header {
-  gap: 12px;
+  gap: 8px;
   justify-content: flex-start;
 }
 
-.hud-sound {
-  margin-left: auto;
+/* 音のボタンは、どの画面でも右上の同じ場所に置く(main の上の余白の内側に固定)。横の列には、そのぶんの場所をあけておく */
+.top-sound {
+  position: absolute;
+  top: max(16px, var(--safe-top));
+  right: max(16px, env(safe-area-inset-right));
+  width: 52px;
+  height: 52px;
+  margin: 0;
+  padding: 0;
+}
+
+.top-row {
+  align-self: stretch;
+  height: 52px;
+}
+
+#screen-select .header,
+.hud {
+  min-height: 52px;
+  padding-right: 60px;
 }
 
 /* 日本語の文を、読みやすいところ(<wbr> を入れた所と、句読点・スペース)だけで折り返す。入れていない所は、あふれるときだけ折り返す */
 .ja,
-.install-dialog {
+.popup {
   word-break: keep-all;
   overflow-wrap: anywhere;
 }
@@ -524,10 +537,6 @@ button.link {
   .title-art {
     width: min(100%, 36dvh);
     align-self: center;
-  }
-
-  .title-logo {
-    font-size: 1.9rem;
   }
 }
 
@@ -566,10 +575,6 @@ button.link {
   margin-left: auto;
   font-weight: 700;
   white-space: nowrap;
-}
-
-.hud-sound {
-  margin-left: 0;
 }
 
 /* 結果の文は、改行で行を分けて出す */

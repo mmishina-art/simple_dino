@@ -10,7 +10,7 @@ import {
 } from './progress';
 import { STAGES } from './stages';
 import { setupInstallGuide } from './install';
-import { checkForUpdate, setupUpdateBanner, type UpdateResult } from './pwa';
+import { checkForUpdate, setupUpdateBanner } from './pwa';
 import { isMusicOn, prepareMusic, setMusicOn, setMusicTempo, setScene, syncMusic, unlockMusic } from './music';
 import { isSoundOn, setSound, sfx, syncSound } from './sound';
 import { stageSongId, type SongId } from './songs';
@@ -45,8 +45,8 @@ function setAudio(on: boolean): void {
 }
 
 function renderToggles(): void {
-  // 音のボタン(タイトルとゲーム中の 2 か所)
-  for (const id of ['sound-button', 'sound-button-game']) {
+  // 音のボタン(タイトル・ステージ選択・ゲーム中の 3 か所。どれも画面の右上)
+  for (const id of ['sound-button', 'sound-button-select', 'sound-button-game']) {
     const el = $(id);
     el.textContent = isAudioOn() ? '🔊' : '🔇';
     el.setAttribute('aria-pressed', String(isAudioOn()));
@@ -474,7 +474,7 @@ $('game-back').addEventListener('click', closeStage);
 
 // ---- ホーム画面の設定・バックアップ・インストール案内 ----
 
-for (const id of ['sound-button', 'sound-button-game']) {
+for (const id of ['sound-button', 'sound-button-select', 'sound-button-game']) {
   $(id).addEventListener('click', () => {
     setAudio(!isAudioOn());
     renderToggles();
@@ -523,20 +523,6 @@ $<HTMLInputElement>('backup-import').addEventListener('change', async (e) => {
 
 $('version').textContent = __APP_VERSION__;
 
-// 「新しい版を確認する」: すぐに確認して、結果を知らせる(新版があれば、「更新」ボタンが出る)
-const UPDATE_MESSAGES: Record<UpdateResult, string> = {
-  latest: 'これが最新の版です',
-  found: '新しい版が見つかりました。「更新」を押してください',
-  offline: '確認できませんでした(通信できません)',
-  unavailable: 'いまは確認できません',
-  skipped: 'これが最新の版です',
-};
-$('update-check').addEventListener('click', async () => {
-  const message = $('update-message');
-  message.textContent = '確認しています…';
-  message.textContent = UPDATE_MESSAGES[await checkForUpdate(true)];
-});
-
 // 隠しコマンド: バージョン表示を 3 秒以内に 7 回タップ → デバッグモードのオン/オフ
 const SECRET_TAPS = 7;
 let taps: number[] = [];
@@ -557,6 +543,9 @@ $('version').parentElement?.addEventListener('pointerup', () => {
 });
 requestPersist();
 setupUpdateBanner($('update-banner'), $('update-button'));
+const backupDialog = $<HTMLDialogElement>('backup-dialog');
+$('backup-open').addEventListener('click', () => backupDialog.showModal());
+backupDialog.querySelector('[data-close]')?.addEventListener('click', () => backupDialog.close());
 setupInstallGuide($<HTMLButtonElement>('install-open'), $<HTMLDialogElement>('install-dialog'), $<HTMLButtonElement>('install-now'));
 // 昔の記録で、効果音と BGM の片方だけが切れていたら、両方切れた状態にそろえる
 setAudio(isAudioOn());
