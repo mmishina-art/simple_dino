@@ -45,9 +45,26 @@ describe('フレームの時間の記録', () => {
   });
 
   it('表示用の文字にできる(2 行)', () => {
-    expect(formatPerf({ fps: 119.6, worstMs: 21.4, jankPct: 2.6, workMs: 0.43, stallPct: 0.4, lateEverySec: 0.84 })).toBe(
-      'FPS 120 ｜ 最悪 21ms ｜ 遅れ 3% ｜ 処理 0.4ms\n長い停止 0% ｜ 遅れの間隔 0.8秒',
-    );
-    expect(formatPerf({ fps: 60, worstMs: 17, jankPct: 0, workMs: 0.2, stallPct: 0, lateEverySec: null })).toContain('遅れの間隔 --');
+    const base = { fps: 119.6, worstMs: 21.4, jankPct: 2.6, workMs: 0.43, stallPct: 0.4, lateEverySec: 0.84, tapFrames: 5, lateWithTapPct: 40, lateNoTapPct: 1.2 };
+    expect(formatPerf(base)).toBe('FPS 120 ｜ 最悪 21ms ｜ 遅れ 3% ｜ 処理 0.4ms\n長い停止 0% ｜ 遅れの間隔 0.8秒\nタップあり 5回で遅れ 40% ｜ なしで遅れ 1%');
+    const none = formatPerf({ ...base, lateEverySec: null, tapFrames: 0, lateWithTapPct: null });
+    expect(none).toContain('遅れの間隔 --');
+    expect(none).toContain('タップあり 0回で遅れ --');
+  });
+
+  it('タップのあったフレームと、なかったフレームで、遅れの割合を分ける', () => {
+    const s = new FrameStats(100);
+    // タップなし 80 フレームは、すべて 16.7ms。タップあり 20 フレームのうち、10 フレームが 33ms(遅れ)
+    for (let i = 0; i < 80; i++) s.record(16.7, 0.2, false);
+    for (let i = 0; i < 20; i++) s.record(i % 2 === 0 ? 33 : 16.7, 0.2, true);
+    const sum = s.summary();
+    expect(sum?.tapFrames).toBe(20);
+    expect(sum?.lateWithTapPct).toBeCloseTo(50, 5);
+    expect(sum?.lateNoTapPct).toBeCloseTo(0, 5);
+    // タップが 1 回もなければ、タップありの割合はなし
+    const idle = new FrameStats(10);
+    for (let i = 0; i < 10; i++) idle.record(16.7, 0.2);
+    expect(idle.summary()?.lateWithTapPct).toBeNull();
+    expect(idle.summary()?.lateNoTapPct).toBe(0);
   });
 });
