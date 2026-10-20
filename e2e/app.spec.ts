@@ -51,6 +51,11 @@ test('ステージを選んで、タップでスタートし、ぶつかると�
   await expect(page.locator('#overlay-text')).toContainText('たまご 0/3');
   await expect(page.locator('#best-marker')).toBeVisible();
 
+  // 「ステージ選択」は、「もういちど」から離して、下に置く(連続で遊ぶとき、押し間違えない)
+  const retry = (await page.getByRole('button', { name: 'もういちど' }).boundingBox())!;
+  const away = (await page.getByRole('button', { name: 'ステージ選択', exact: true }).boundingBox())!;
+  expect(away.y - (retry.y + retry.height)).toBeGreaterThanOrEqual(20);
+
   // もういちど: すぐに同じステージを走り出す(進み具合が 0 に戻って、また進む)
   await page.getByRole('button', { name: 'もういちど' }).click();
   await expect(page.locator('#game-overlay')).toBeHidden();
