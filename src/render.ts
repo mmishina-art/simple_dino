@@ -1,7 +1,7 @@
 // Canvas への描画。ゲームの状態(GameState)を絵にするだけで、ルールには触れない。
 // 座標は論理 px(横 VIEW_W × 縦 VIEW_H)。実際の画面の大きさに合わせて、scale 倍で描く。
 // ドット絵がにじまないよう、四角は端末の px にそろえて塗る。
-import { DINO_BODY, EGG_H, EGG_W, MEAT_H, MEAT_W, OBSTACLE_SIZES, bodyOffset, bodyOfState, type GameState, type ObstacleKind } from './logic';
+import { DINO_BODY, EGG_H, EGG_W, MEAT_H, MEAT_W, OBSTACLE_SIZES, bodyOffset, bodyOfState, obstacleRange, type GameState, type ObstacleKind } from './logic';
 import type { Particle, Popup } from './fx';
 import { DINO, DINO_CHIBI, DINO_CHIBI_ORIG, DINO_EVO, EGG, MEAT, SPRITES, squashed, type Sprite } from './sprites';
 import { THEMES, type Theme } from './themes';
@@ -241,7 +241,9 @@ export function drawScene(c: CanvasRenderingContext2D, width: number, state: Gam
   if (gx < VIEW_W + 40) drawGoal(p, theme, gx);
 
   // 障害物
-  for (const o of stage.obstacles) {
+  const [first, last] = obstacleRange(stage.obstacles, d - DINO_SCREEN_X - 4, d - DINO_SCREEN_X + VIEW_W);
+  for (let n = first; n < last; n++) {
+    const o = stage.obstacles[n];
     const x = DINO_SCREEN_X + (o.x - d);
     if (x > VIEW_W || x + o.w < -4) continue;
     const [main, accent] = obstacleColors(o.kind, theme);

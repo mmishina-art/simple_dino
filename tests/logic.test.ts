@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createEndless } from '../src/endless';
 import {
-  BOOST_BODIES, DINO_BODY, DT, BOOST_FRAMES, BOOST_MAX, BOOST_RAMP, BOOST_STEP, BUFFER_FRAMES, DINO_W, MEAT_PICKUP, MEAT_W, MULT_STEP, approachFactor, boostTarget, scoreMultiplier, FPS, JUMP_V, bodyOffset, bodyOfState, distanceAt, goalFrame, hits, newGame, step, stepBody, touchesEgg, touchesMeat, trackNearMiss, progressPercent, NEAR_MISS_PX, type GameState, type Input, type StageDef,
+  BOOST_BODIES, DINO_BODY, DT, BOOST_FRAMES, BOOST_MAX, BOOST_RAMP, BOOST_STEP, BUFFER_FRAMES, DINO_W, MEAT_PICKUP, MEAT_W, MULT_STEP, approachFactor, boostTarget, scoreMultiplier, FPS, JUMP_V, bodyOffset, bodyOfState, distanceAt, goalFrame, hits, newGame, obstacleRange, step, stepBody, touchesEgg, touchesMeat, trackNearMiss, progressPercent, NEAR_MISS_PX, type GameState, type Input, type StageDef,
 } from '../src/logic';
 
 const NONE: Input = { pressed: false, held: false };
@@ -402,5 +402,36 @@ describe('エンドレスの体は、肉のレベルで大きくなる', () => {
     const at = (boost: number): GameState => ({ ...newGame(stage), boost, boostLeft: boost > 0 ? BOOST_FRAMES : 0 });
     expect(step(at(3), NONE).status).toBe('dead');
     for (const level of [0, 1, 2]) expect(step(at(level), NONE).status, `レベル ${level}`).toBe('running');
+  });
+});
+
+describe('障害物の絞り込み(エンドレスは障害物が増えつづけるので、近くだけを見る)', () => {
+  const stage = createEndless(7);
+  stage.extend?.(60000);
+  const all = stage.obstacles;
+
+  it('番号の範囲は、位置の近い障害物だけで、重なりうるものは、すべてふくむ', () => {
+    for (const x of [0, 123, 5000, 31234, 59000]) {
+      const [start, end] = obstacleRange(all, x, x + 20);
+      expect(end - start).toBeLessThan(8);
+      all.forEach((o, i) => {
+        const overlaps = o.x < x + 20 && o.x + o.w > x;
+        if (overlaps) expect(i >= start && i < end).toBe(true);
+      });
+    }
+  });
+
+  it('当たり判定は、全部を順に調べたときと同じ(位置・高さ・余裕を変えても)', () => {
+    const brute = (dx: number, y: number, margin: number, w: number): boolean => {
+      for (const o of all) {
+        if (hits([o], dx, y, margin, w)) return true;
+      }
+      return false;
+    };
+    for (let dx = 0; dx < 60000; dx += 37) {
+      for (const y of [0, 20, 50]) {
+        for (const margin of [0, 3]) expect(hits(all, dx, y, margin, 20)).toBe(brute(dx, y, margin, 20));
+      }
+    }
   });
 });
