@@ -447,7 +447,8 @@ function pressInput(): void {
   if (player.phase === 'ready') {
     hint.hidden = true;
     if (!current.endless) updateProgress(recordAttempt(progress, current.id));
-    setScene(songIdOf(current), { restart: true });
+    // 曲はステージを開いたときから鳴っている。ここで作り直すと、開始の瞬間に引っかかる
+    setScene(songIdOf(current));
     sfx('start');
     player.begin();
   } else if (player.phase === 'playing') {

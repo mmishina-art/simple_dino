@@ -87,6 +87,19 @@ export function unlockMusic(): void {
   if (!running) startDesired();
 }
 
+const stepCache = new Map<SongId, Map<number, NoteEvent[]>>();
+
+/** 曲の音符を、拍ごとにまとめたもの(曲ごとに1回だけ作る) */
+function eventsByStep(song: Song): Map<number, NoteEvent[]> {
+  let m = stepCache.get(song.id);
+  if (!m) {
+    m = new Map();
+    for (const e of buildEvents(song)) m.set(e.step, [...(m.get(e.step) ?? []), e]);
+    stepCache.set(song.id, m);
+  }
+  return m;
+}
+
 function startDesired(delay = 0): void {
   if (!enabled || !unlocked || desired === null || running) return;
   let ctx: AudioContext;
@@ -100,8 +113,7 @@ function startDesired(delay = 0): void {
     if (ctx.state === 'suspended') return;
   }
   const song = songById(desired);
-  const byStep = new Map<number, NoteEvent[]>();
-  for (const e of buildEvents(song)) byStep.set(e.step, [...(byStep.get(e.step) ?? []), e]);
+  const byStep = eventsByStep(song);
   const bus = ctx.createGain();
   bus.gain.value = MASTER_GAIN;
   bus.connect(ctx.destination);
