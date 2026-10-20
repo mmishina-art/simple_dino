@@ -10,7 +10,7 @@ import {
 import { DINO_SCREEN_X, GROUND_Y, VIEW_H, VIEW_W, drawScene } from './render';
 import { meters } from './endless';
 import { alphaOf, lerp, tick } from './clock';
-import { FrameStats, type PerfSummary } from './perf';
+import { FrameStats, InputStats, type PerfSummary } from './perf';
 import { themeOf } from './themes';
 
 export type Phase = 'ready' | 'playing' | 'paused' | 'dead' | 'cleared';
@@ -84,6 +84,8 @@ export class Player {
   /** 前のフレームから今までに、タップがあったか(デバッグモードの、タップと遅れの関係の記録用) */
   private tapped = false;
   private readonly stats = new FrameStats(180);
+  /** デバッグモード: タップが届くまでの遅れと、受け付けの処理の時間 */
+  readonly inputStats = new InputStats(30);
   private statsSince = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly handlers: PlayHandlers, stage: StageDef) {

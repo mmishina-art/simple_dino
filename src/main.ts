@@ -4,7 +4,7 @@ import { CHARACTERS, characterById, forCharacter, isCharacterUnlocked, sanitizeC
 import { createEndless } from './endless';
 import { scoreMultiplier } from './logic';
 import { Player } from './play';
-import { formatPerf } from './perf';
+import { formatInput, formatPerf } from './perf';
 import {
   allCleared, bestOf, isCleared, isUnlocked, markEndingSeen, recordAttempt, recordClear, recordDeath, recordEndless, sanitizeProgress, starsOf, totalAttempts, totalStars, type Progress,
 } from './progress';
@@ -118,9 +118,14 @@ function renderStageList(): void {
   // デバッグモードのときだけ、フレームの時間を記録して、ゲーム画面に出す
   player.perf = debug;
   perfHud.hidden = !debug;
+  $('input-method').hidden = !debug;
   if (!debug && renderMode !== 0) {
     renderMode = 0;
     player.setRenderMode(null);
+  }
+  if (!debug && inputMethod !== 0) {
+    inputMethod = 0;
+    $('input-method').textContent = `入力: ${INPUT_METHODS[0]}`;
   }
   showPerf();
   const list = $('stage-list');
@@ -190,8 +195,11 @@ const RENDER_MODES: readonly { label: string; cap: number | null; off: boolean; 
 ];
 let renderMode = 0;
 let lastPerf = '';
+/** デバッグモードの切り分け: 画面を押したときの受け方(pointerdown / touchstart)。左上のボタンで切り替える */
+const INPUT_METHODS = ['pointerdown', 'touchstart'] as const;
+let inputMethod = 0;
 const showPerf = (): void => {
-  perfHud.textContent = `${lastPerf || 'FPS --'} ｜ ${RENDER_MODES[renderMode].label}`;
+  perfHud.textContent = `${lastPerf || 'FPS --'} ｜ ${RENDER_MODES[renderMode].label}\n${formatInput(player.inputStats.summary(), INPUT_METHODS[inputMethod])}`;
 };
 const progressBar = $('progress-bar');
 let barPercent = -1;
@@ -462,13 +470,26 @@ const guardDoubleTapZoom = (e: TouchEvent): void => {
 };
 for (const el of [title, select, ending]) el.addEventListener('touchend', guardDoubleTapZoom, { passive: false });
 
-game.addEventListener('pointerdown', (e) => {
-  if (isControl(e.target)) return;
+/** 画面を押した。受け方(pointerdown / touchstart)のどちらでも、同じ処理にする。デバッグモードのときは、届くまでの遅れと処理の時間を記録する */
+function onPress(e: Event, method: number): void {
+  if (method !== inputMethod || isControl(e.target)) return;
+  const began = performance.now();
   e.preventDefault();
   pressInput();
+  if (debug) player.inputStats.record(began - e.timeStamp, performance.now() - began);
+}
+game.addEventListener('pointerdown', (e) => onPress(e, 0));
+game.addEventListener('touchstart', (e) => onPress(e, 1), { passive: false });
+game.addEventListener('touchend', () => {
+  if (inputMethod === 1) player.release();
+});
+game.addEventListener('touchcancel', () => {
+  if (inputMethod === 1) player.release();
 });
 for (const type of ['pointerup', 'pointercancel', 'pointerleave'] as const) {
-  game.addEventListener(type, () => player.release());
+  game.addEventListener(type, () => {
+    if (inputMethod === 0) player.release();
+  });
 }
 document.addEventListener('keydown', (e) => {
   if (game.hidden || e.repeat || !['Space', 'ArrowUp', 'KeyW'].includes(e.code)) return;
@@ -538,6 +559,13 @@ $<HTMLInputElement>('backup-import').addEventListener('change', async (e) => {
 });
 
 $('version').textContent = __APP_VERSION__;
+
+$('input-method').addEventListener('click', () => {
+  inputMethod = (inputMethod + 1) % INPUT_METHODS.length;
+  player.inputStats.reset();
+  $('input-method').textContent = `入力: ${INPUT_METHODS[inputMethod]}`;
+  showPerf();
+});
 
 perfHud.addEventListener('click', () => {
   renderMode = (renderMode + 1) % RENDER_MODES.length;

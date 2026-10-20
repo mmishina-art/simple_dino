@@ -662,3 +662,9 @@ button.link {
   white-space: pre-line;
   max-width: calc(100% - 12px);
 }
+
+/* デバッグモード: 入力の受け方を切り替えるボタン(ゲーム画面の左上) */
+.perf-input {
+  bottom: auto;
+  top: 6px;
+}

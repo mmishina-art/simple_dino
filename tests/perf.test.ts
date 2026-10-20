@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FrameStats, formatPerf } from '../src/perf';
+import { FrameStats, InputStats, formatInput, formatPerf } from '../src/perf';
 
 describe('フレームの時間の記録', () => {
   it('記録がなければ null', () => {
@@ -45,8 +45,8 @@ describe('フレームの時間の記録', () => {
   });
 
   it('表示用の文字にできる(2 行)', () => {
-    const base = { fps: 119.6, worstMs: 21.4, jankPct: 2.6, workMs: 0.43, stallPct: 0.4, lateEverySec: 0.84, tapFrames: 5, lateWithTapPct: 40, lateNoTapPct: 1.2 };
-    expect(formatPerf(base)).toBe('FPS 120 ｜ 最悪 21ms ｜ 遅れ 3% ｜ 処理 0.4ms\n長い停止 0% ｜ 遅れの間隔 0.8秒\nタップあり 5回で遅れ 40% ｜ なしで遅れ 1%');
+    const base = { fps: 119.6, worstMs: 21.4, jankPct: 2.6, workMs: 0.43, stallPct: 0.4, lateEverySec: 0.84, tapFrames: 5, lateWithTapPct: 40, lateNoTapPct: 1.2, workMaxMs: 3.26 };
+    expect(formatPerf(base)).toBe('FPS 120 ｜ 最悪 21ms ｜ 遅れ 3% ｜ 処理 0.4ms(最大 3.3)\n長い停止 0% ｜ 遅れの間隔 0.8秒\nタップあり 5回で遅れ 40% ｜ なしで遅れ 1%');
     const none = formatPerf({ ...base, lateEverySec: null, tapFrames: 0, lateWithTapPct: null });
     expect(none).toContain('遅れの間隔 --');
     expect(none).toContain('タップあり 0回で遅れ --');
@@ -66,5 +66,37 @@ describe('フレームの時間の記録', () => {
     for (let i = 0; i < 10; i++) idle.record(16.7, 0.2);
     expect(idle.summary()?.lateWithTapPct).toBeNull();
     expect(idle.summary()?.lateNoTapPct).toBe(0);
+  });
+
+  it('処理の最大も、まとめる', () => {
+    const s = new FrameStats(10);
+    s.record(16.7, 0.2);
+    s.record(16.7, 4.5);
+    expect(s.summary()?.workMaxMs).toBe(4.5);
+  });
+});
+
+describe('入力(タップ)の記録', () => {
+  it('届くまでの遅れの平均と最大、受付の処理の最大をまとめる', () => {
+    const s = new InputStats(30);
+    expect(s.summary()).toBeNull();
+    s.record(2, 0.1);
+    s.record(6, 0.4);
+    const sum = s.summary();
+    expect(sum).toEqual({ count: 2, latencyAvgMs: 4, latencyMaxMs: 6, handlerMaxMs: 0.4 });
+    expect(formatInput(sum, 'pointerdown')).toBe('入力 届くまで 平均 4.0ms 最大 6.0ms ｜ 受付の処理 最大 0.4ms ｜ 方式 pointerdown');
+    expect(formatInput(null, 'touchstart')).toBe('入力 まだなし ｜ 方式 touchstart');
+  });
+
+  it('時計が合わない値は数えず、直近の size 回だけ持つ', () => {
+    const s = new InputStats(3);
+    s.record(-500, 0.1); // 負の数: 数えない
+    s.record(99999, 0.1); // 極端に大きな数: 数えない
+    expect(s.summary()).toBeNull();
+    for (const v of [1, 2, 3, 4]) s.record(v, 0.1);
+    expect(s.summary()?.count).toBe(3);
+    expect(s.summary()?.latencyMaxMs).toBe(4);
+    s.reset();
+    expect(s.summary()).toBeNull();
   });
 });
