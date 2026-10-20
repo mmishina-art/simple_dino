@@ -10,7 +10,7 @@ import {
 } from './progress';
 import { STAGES } from './stages';
 import { setupInstallGuide } from './install';
-import { setupUpdateBanner } from './pwa';
+import { checkForUpdate, setupUpdateBanner, type UpdateResult } from './pwa';
 import { isMusicOn, setMusicOn, setMusicTempo, setScene, syncMusic, unlockMusic } from './music';
 import { isSoundOn, setSound, sfx, syncSound } from './sound';
 import { stageSongId, type SongId } from './songs';
@@ -167,6 +167,8 @@ function show(screen: HTMLElement): void {
   stopTitle?.();
   stopTitle = screen === title ? startTitle($<HTMLCanvasElement>('title-canvas')) : undefined;
   if (screen === title || screen === select) setScene('title');
+  // タイトル画面に来たら、新版があるか確認する(前に確認したばかりなら見送る)
+  if (screen === title) void checkForUpdate();
 }
 
 // ---- ゲーム画面 ----
@@ -503,6 +505,20 @@ $<HTMLInputElement>('backup-import').addEventListener('change', async (e) => {
 });
 
 $('version').textContent = __APP_VERSION__;
+
+// 「新しい版を確認する」: すぐに確認して、結果を知らせる(新版があれば、「更新」ボタンが出る)
+const UPDATE_MESSAGES: Record<UpdateResult, string> = {
+  latest: 'これが最新の版です',
+  found: '新しい版が見つかりました。「更新」を押してください',
+  offline: '確認できませんでした(通信できません)',
+  unavailable: 'いまは確認できません',
+  skipped: 'これが最新の版です',
+};
+$('update-check').addEventListener('click', async () => {
+  const message = $('update-message');
+  message.textContent = '確認しています…';
+  message.textContent = UPDATE_MESSAGES[await checkForUpdate(true)];
+});
 
 // 隠しコマンド: バージョン表示を 3 秒以内に 7 回タップ → デバッグモードのオン/オフ
 const SECRET_TAPS = 7;
