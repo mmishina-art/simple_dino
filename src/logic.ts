@@ -209,6 +209,26 @@ export function progressPercent(s: GameState): number {
 /** 「ぎりぎり」と呼ぶ、障害物の上のすきま(px)。これより小さいすきまで越えたら、ぎりぎり */
 export const NEAR_MISS_PX = 10;
 
+const MAX_OBSTACLE_W = Math.max(...Object.values(OBSTACLE_SIZES).map((o) => o.w));
+
+/**
+ * 横の位置が lo〜hi に重なりうる障害物の、番号の範囲 [start, end)。障害物は、左から順に並んでいるので、二分探索で求める。
+ * エンドレスは、走るほど障害物が増えつづけるので、毎フレーム全部を見ないようにするため。
+ */
+export function obstacleRange(obstacles: readonly Obstacle[], lo: number, hi: number): [number, number] {
+  const firstAfter = (x: number): number => {
+    let a = 0;
+    let b = obstacles.length;
+    while (a < b) {
+      const mid = (a + b) >> 1;
+      if (obstacles[mid].x <= x) a = mid + 1;
+      else b = mid;
+    }
+    return a;
+  };
+  return [firstAfter(lo - MAX_OBSTACLE_W - 1), firstAfter(hi)];
+}
+
 /**
  * 障害物を越えたとき、すきまがせまかったか調べる(演出用)。minClear は、いま重なっている障害物ごとの「いちばん近づいたときのすきま」で、
  * この関数が書き換える(呼ぶ側が持ち続ける)。ぎりぎりで越えた障害物の番号を返す。
@@ -218,8 +238,10 @@ export function trackNearMiss(minClear: Map<number, number>, s: GameState): numb
   const dx = s.dist + bodyOffset(s.stage, body);
   const w = body.w;
   const passed: number[] = [];
-  s.stage.obstacles.forEach((o, i) => {
-    if (o.x > dx + w + 4) return;
+  // 越えたばかり(1 フレームで進む距離より、じゅうぶん広く)から、すぐ先までの障害物だけを見る
+  const [start, end] = obstacleRange(s.stage.obstacles, dx - 40, dx + w + 4);
+  for (let i = start; i < end; i++) {
+    const o = s.stage.obstacles[i];
     if (dx >= o.x + o.w) {
       const gap = minClear.get(i);
       if (gap !== undefined) {
@@ -229,7 +251,7 @@ export function trackNearMiss(minClear: Map<number, number>, s: GameState): numb
     } else if (dx + w > o.x) {
       minClear.set(i, Math.min(minClear.get(i) ?? Infinity, s.y - o.h));
     }
-  });
+  }
   return passed;
 }
 
@@ -242,7 +264,9 @@ export function goalFrame(stage: StageDef): number {
 export function hits(obstacles: readonly Obstacle[], dx: number, y: number, margin = 0, width = DINO_W): boolean {
   const left = dx;
   const right = dx + width;
-  for (const o of obstacles) {
+  const [start, end] = obstacleRange(obstacles, left - margin, right + margin);
+  for (let n = start; n < end; n++) {
+    const o = obstacles[n];
     // まず、四角(外側)で大まかに判定する
     if (!(right > o.x - margin && left < o.x + o.w + margin && y < o.h + margin)) continue;
     const profile = PROFILES[o.kind];
