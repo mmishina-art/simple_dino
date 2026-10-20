@@ -712,6 +712,19 @@ test('ダブルタップでの拡大を防ぐ: 0.35 秒以内の 2 回目のタ�
     return { first, second, onButton };
   });
   expect(result).toEqual({ first: false, second: true, onButton: false });
+  // ゲーム画面には、この止める処理を付けない(touch-action: none で拡大されない。タッチのたびに待たせない)
+  await page.getByRole('button', { name: 'あそぶ' }).click();
+  await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
+  const inGame = await page.evaluate(() => {
+    const canvas = document.getElementById('game-canvas') as Element;
+    const fire = (): boolean => {
+      const e = new Event('touchend', { bubbles: true, cancelable: true });
+      canvas.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    return { first: fire(), second: fire(), touchAction: getComputedStyle(document.getElementById('screen-game') as Element).touchAction };
+  });
+  expect(inGame).toEqual({ first: false, second: false, touchAction: 'none' });
   // CSS でも、すべての要素で、ダブルタップ拡大だけを防いでいる
   expect(await page.evaluate(() => getComputedStyle(document.querySelector('.title-lead') as Element).touchAction)).toBe('manipulation');
 });

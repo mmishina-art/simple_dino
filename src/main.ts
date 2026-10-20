@@ -452,16 +452,15 @@ function pressInput(): void {
 // ダブルタップでの画面の拡大を防ぐ(iPhone)。CSS の touch-action だけでは、防げないことがある。
 // 前のタップから 0.35 秒以内の 2 回目のタップは、ブラウザの標準の動き(拡大)を止める。ボタンやリンクは、止めない(押せなくなるため)。
 // ピンチでの拡大は、そのまま使える。ジャンプは pointerdown で受けるので、影響しない。
+// ゲーム画面には付けない: そこは CSS の touch-action: none で、拡大されない。止められるタッチの受け皿(passive: false)が
+// あると、ブラウザは、タッチのたびに、その処理を待つ。連打したときの、画面の更新の遅れの原因になりうるため。
 let lastTouchEnd = 0;
-document.addEventListener(
-  'touchend',
-  (e) => {
-    const now = Date.now();
-    if (now - lastTouchEnd < 350 && !isControl(e.target) && e.cancelable) e.preventDefault();
-    lastTouchEnd = now;
-  },
-  { passive: false },
-);
+const guardDoubleTapZoom = (e: TouchEvent): void => {
+  const now = Date.now();
+  if (now - lastTouchEnd < 350 && !isControl(e.target) && e.cancelable) e.preventDefault();
+  lastTouchEnd = now;
+};
+for (const el of [title, select, ending]) el.addEventListener('touchend', guardDoubleTapZoom, { passive: false });
 
 game.addEventListener('pointerdown', (e) => {
   if (isControl(e.target)) return;
@@ -507,7 +506,8 @@ $('select-back').addEventListener('click', () => show(title));
 $('endless-open').addEventListener('click', openEndless);
 
 // ブラウザは、利用者が操作するまで音を出せない。最初の操作で BGM(タイトル曲)を始める
-for (const type of ['click', 'touchend', 'pointerup', 'keydown'] as const) document.addEventListener(type, unlockMusic, { capture: true });
+// (止める処理はないので passive にして、ブラウザに待たせない)
+for (const type of ['click', 'touchend', 'pointerup', 'keydown'] as const) document.addEventListener(type, unlockMusic, { capture: true, passive: true });
 
 $('backup-export').addEventListener('click', () => {
   const blob = new Blob([exportBackup()], { type: 'application/json' });

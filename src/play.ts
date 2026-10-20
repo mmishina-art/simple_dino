@@ -81,6 +81,8 @@ export class Player {
   private drawOff = false;
   /** 切り分け用: ゲームを進めず、描きもしない(画面の更新のリズムだけを測る) */
   private idle = false;
+  /** 前のフレームから今までに、タップがあったか(デバッグモードの、タップと遅れの関係の記録用) */
+  private tapped = false;
   private readonly stats = new FrameStats(180);
   private statsSince = 0;
 
@@ -149,6 +151,7 @@ export class Player {
     if (this.phase !== 'playing') return;
     this.pendingPress = true;
     this.held = true;
+    this.tapped = true;
   }
 
   release(): void {
@@ -201,7 +204,8 @@ export class Player {
   private recordPerf(gapMs: number, workMs: number): void {
     // 最初のフレーム(止まっていた時間をふくむ)は、数えない
     if (gapMs > 200) return;
-    this.stats.record(gapMs, workMs);
+    this.stats.record(gapMs, workMs, this.tapped);
+    this.tapped = false;
     this.statsSince += 1;
     if (this.statsSince >= 30) {
       this.statsSince = 0;
