@@ -12,7 +12,7 @@
   body { display: flex; flex-direction: column; gap: 8px; padding: max(24px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
   h1 { font-size: 16px; margin: 0; }
   p { font-size: 13px; margin: 0; line-height: 1.5; }
-  #pad { flex: 1; min-height: 200px; border-radius: 12px; background: #2b4a7a; display: block; width: 100%; }
+  #pad { flex: 1; width: 100%; border-radius: 12px; background: #2b4a7a; display: block; }
   pre { margin: 0; padding: 8px; background: #fffdf6; border-radius: 8px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
   .row { display: flex; gap: 8px; }
   button { min-height: 44px; flex: 1; font-size: 14px; border-radius: 10px; border: 1px solid #c9bf9c; background: #fffdf6; }
@@ -20,35 +20,59 @@
 </head>
 <body>
 <h1>タップ計測テスト(ゲームとは別の、ほぼ何もしないページ)</h1>
-<p>青い部分を、ゆっくり何度もタップしてください。白い四角は一定の速さで動きます。遅れの数字を見ます。</p>
-<canvas id="pad"></canvas>
+<p>青い部分を、ゆっくり 30 回ほどタップして、「タップあり」の遅れの割合を見ます。下のボタンで設定を 1 つずつ変えて(変えると数字はリセットされます)、遅れが減る設定を探します。</p>
+<div id="holder" style="flex:1;display:flex;min-height:200px"></div>
 <pre id="out">計測中…</pre>
 <div class="row">
-  <button id="method" type="button">入力: pointerdown</button>
+  <button id="method" type="button"></button>
+  <button id="touchaction" type="button"></button>
+</div>
+<div class="row">
+  <button id="prevent" type="button"></button>
+  <button id="canvasmode" type="button"></button>
+</div>
+<div class="row">
+  <button id="target" type="button"></button>
   <button id="reset" type="button">数字をリセット</button>
 </div>
 <script>
 (function () {
-  var canvas = document.getElementById('pad');
+  var holder = document.getElementById('holder');
   var out = document.getElementById('out');
-  var ctx = canvas.getContext('2d');
   var SIZE = 180;
-  var gaps = [], taps = [];
-  var last = 0, tapped = false, x = 0, flash = 0;
-  var delays = [];
-  var method = 'pointerdown';
-  var maxHandler = 0;
+  var gaps = [], taps = [], delays = [];
+  var last = 0, tapped = false, x = 0, flash = 0, maxHandler = 0;
+  var canvas = null, ctx = null;
+
+  // 試す設定。ボタンを押すと、順番に切り替わる
+  var OPTIONS = {
+    method: ['pointerdown', 'touchstart', 'mousedown'],
+    touchaction: ['manipulation', 'none', 'auto'],
+    prevent: ['なし', 'あり'],
+    canvasmode: ['ふつう', '別描き'],
+    target: ['canvas', '画面全体']
+  };
+  var LABELS = {
+    method: function (v) { return '入力: ' + v; },
+    touchaction: function (v) { return 'touch-action: ' + v; },
+    prevent: function (v) { return 'touchstart を止める: ' + v; },
+    canvasmode: function (v) { return 'Canvas: ' + v; },
+    target: function (v) { return '受ける場所: ' + v; }
+  };
+  var state = { method: 0, touchaction: 0, prevent: 0, canvasmode: 0, target: 0 };
+  var cur = function (k) { return OPTIONS[k][state[k]]; };
 
   function resize() {
+    if (!canvas) return;
     var r = canvas.getBoundingClientRect();
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.round(r.width * dpr);
     canvas.height = Math.round(r.height * dpr);
   }
   window.addEventListener('resize', resize);
-  resize();
 
   function onTap(e) {
+    if (e.target && e.target.closest && e.target.closest('button')) return;
     var t0 = performance.now();
     tapped = true;
     flash = 6;
@@ -57,22 +81,49 @@
     if (d >= 0 && d < 1000) { delays.push(d); if (delays.length > 30) delays.shift(); }
     var h = performance.now() - t0;
     if (h > maxHandler) maxHandler = h;
+    if (cur('prevent') === 'あり' && e.type === 'touchstart' && e.cancelable) e.preventDefault();
+  }
+
+  var attached = [];
+  function detach() {
+    attached.forEach(function (a) { a[0].removeEventListener(a[1], onTap, a[2]); });
+    attached = [];
   }
   function attach() {
-    canvas.removeEventListener('pointerdown', onTap);
-    canvas.removeEventListener('touchstart', onTap);
-    canvas.addEventListener(method, onTap, { passive: true });
+    detach();
+    var where = cur('target') === 'canvas' ? canvas : document;
+    var opts = { passive: cur('prevent') !== 'あり' };
+    where.addEventListener(cur('method'), onTap, opts);
+    attached.push([where, cur('method'), opts]);
   }
-  attach();
 
-  document.getElementById('method').addEventListener('click', function () {
-    method = method === 'pointerdown' ? 'touchstart' : 'pointerdown';
-    this.textContent = '入力: ' + method;
+  // Canvas は、作るときに設定が決まるので、作り直す
+  function build() {
+    holder.textContent = '';
+    canvas = document.createElement('canvas');
+    canvas.id = 'pad';
+    canvas.style.touchAction = cur('touchaction');
+    holder.appendChild(canvas);
+    resize();
+    ctx = cur('canvasmode') === 'ふつう' ? canvas.getContext('2d') : canvas.getContext('2d', { alpha: false, desynchronized: true });
     attach();
+  }
+
+  function reset() { gaps = []; taps = []; delays = []; maxHandler = 0; last = 0; }
+
+  Object.keys(OPTIONS).forEach(function (k) {
+    var b = document.getElementById(k);
+    var label = function () { b.textContent = LABELS[k](cur(k)); };
+    label();
+    b.addEventListener('click', function () {
+      state[k] = (state[k] + 1) % OPTIONS[k].length;
+      label();
+      build();
+      reset();
+    });
   });
-  document.getElementById('reset').addEventListener('click', function () {
-    gaps = []; taps = []; delays = []; maxHandler = 0;
-  });
+  document.getElementById('reset').addEventListener('click', reset);
+  build();
 
   function frame(now) {
     requestAnimationFrame(frame);
@@ -115,7 +166,7 @@
       'FPS ' + Math.round(1000 / med) + ' | 最悪 ' + Math.round(worst) + 'ms | 遅れ ' + pct(late, gaps.length) + '\n' +
       'タップあり ' + tapN + '回中 ' + (tapN ? pct(tapLate, tapN) : '--') + ' で遅れ | なしで遅れ ' + pct(noTapLate, noTapN) + '\n' +
       '入力 届くまで 平均 ' + (delays.length ? avg(delays).toFixed(1) : '--') + 'ms | 受付の処理 最大 ' + maxHandler.toFixed(1) + 'ms\n' +
-      '方式 ' + method;
+      '設定 ' + cur('method') + ' / ' + cur('touchaction') + ' / 止める' + cur('prevent') + ' / ' + cur('canvasmode') + ' / ' + cur('target');
   }, 250);
 })();
 </script>

@@ -70,7 +70,7 @@ npx playwright install chromium && npm run test:e2e
 
 ## タップ計測テストのページ
 
-ゲームとは別の、ほぼ何もしないページ `tap-test.html`(公開 URL の末尾に `tap-test.html` をつけて開く)です。全画面の Canvas で白い四角を動かし、タップしたフレームだけが遅れるかを数字で出します。ゲームでのカクつきが、iOS / iPadOS そのものによるものか、アプリの処理によるものかを切り分けるためのものです(`public/tap-test.html`)。
+ゲームとは別の、ほぼ何もしないページ `tap-test.html`(公開 URL の末尾に `tap-test.html` をつけて開く)です。全画面の Canvas で白い四角を動かし、タップしたフレームだけが遅れるかを数字で出します。ゲームでのカクつきが、iOS / iPadOS そのものによるものか、アプリの処理によるものかを切り分けるためのものです(`public/tap-test.html`)。下のボタンで、入力の受け方・`touch-action`・`touchstart` を止めるか・Canvas の作り方・イベントを受ける場所を切り替えて、遅れが減る設定を探せます。
 
 ## ステージの難しさを変えるとき
 

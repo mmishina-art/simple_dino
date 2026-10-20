@@ -769,4 +769,11 @@ test('タップ計測テストのページ: 開けて、タップすると入力
   await expect(page.locator('#out')).toContainText('届くまで 平均');
   await page.locator('#method').click();
   await expect(page.locator('#method')).toHaveText('入力: touchstart');
+  // 設定を切り替えても、Canvas が作り直されて、また動く
+  await page.locator('#canvasmode').click();
+  await page.locator('#touchaction').click();
+  await page.locator('#target').click();
+  await page.locator('#prevent').click();
+  await expect(page.locator('#out')).toContainText('FPS', { timeout: 10_000 });
+  await expect(page.locator('#out')).toContainText('別描き');
 });
