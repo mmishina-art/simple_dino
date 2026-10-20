@@ -14,11 +14,16 @@
   --primary: #3f7d3a;
   --primary-text: #ffffff;
   --boost: #d9643a;
+  /* たまごの色(ゲーム画面の中は src/render.ts の EGG_WHITE / EGG_SHADE。同じ色にそろえる) */
+  --egg-white: #ffffff;
+  --egg-shade: #c9d3e3;
 }
 
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
+  /* ダブルタップ拡大だけ防ぐ(ピンチ拡大は許可)。iPhone は、親にだけ指定しても効かないことがあるので、すべての要素に付ける */
+  touch-action: manipulation;
 }
 
 /* display を指定した要素でも hidden 属性で確実に隠す */
@@ -489,10 +494,36 @@ button.link {
   margin-left: auto;
 }
 
-/* 背の低い画面(iPhone SE など)では、説明文を省いて、タイトル画面が 1 画面に収まるようにする */
+/* 日本語の文を、読みやすいところ(<wbr> を入れた所と、句読点・スペース)だけで折り返す。入れていない所は、あふれるときだけ折り返す */
+.ja,
+.install-dialog {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+/* 中身のない説明・結果の欄は、場所をとらない(並べたときのすきまが、むだに空かないように) */
+.title-screen > p:empty {
+  display: none;
+}
+
+/* ボタンのあいだは、並べるときのすきまだけにする(さらに余白を足さない) */
+.title-screen .link {
+  margin: 0;
+}
+
+#endless-best {
+  white-space: nowrap;
+}
+
+/* 背の低い画面(iPhone SE など)では、説明文を省いて、絵を小さくして、タイトル画面が 1 画面に収まるようにする */
 @media (max-height: 740px) {
   .title-lead {
     display: none;
+  }
+
+  .title-art {
+    width: min(100%, 36dvh);
+    align-self: center;
   }
 
   .title-logo {
@@ -511,6 +542,24 @@ button.link {
 
 .hud-best {
   font-size: 0.85rem;
+}
+
+.egg-icon {
+  width: 0.9em;
+  height: 1.03em;
+  vertical-align: -0.12em;
+}
+
+.egg-edge {
+  fill: var(--text);
+}
+
+.egg-body {
+  fill: var(--egg-white);
+}
+
+.egg-shine {
+  fill: var(--egg-shade);
 }
 
 .egg-counter {
@@ -542,10 +591,12 @@ button.link {
   line-height: 1.25;
 }
 
+/* 長い名前は 2 行まで折り返す(1 行だと「ステージ1…」と切れて、どのステージか分からなくなる) */
 .hud-title {
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
   font-size: 0.95rem;
 }
 

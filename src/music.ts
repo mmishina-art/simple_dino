@@ -54,7 +54,6 @@ export function setMusicOn(on: boolean, persist = true): void {
   else stopRunning();
 }
 
-/** いまの場面の曲を伝える。restart が true なら、同じ曲でも頭から。delay は鳴らし始めるまでの秒数 */
 /** テンポを、曲の何倍にするか変える。いま鳴っている曲も、リズムをとぎらせずに、すぐ変わる */
 export function setMusicTempo(factor: number): void {
   tempo = factor;
@@ -66,6 +65,7 @@ export function setMusicTempo(factor: number): void {
   r.t0 = nextTime - r.next * r.stepSec;
 }
 
+/** いまの場面の曲を伝える。restart が true なら、同じ曲でも頭から。delay は鳴らし始めるまでの秒数 */
 export function setScene(id: SongId | null, opts: { restart?: boolean; delay?: number } = {}): void {
   const same = desired === id && running?.id === id;
   desired = id;
@@ -73,6 +73,11 @@ export function setScene(id: SongId | null, opts: { restart?: boolean; delay?: n
   tempo = 1;
   stopRunning();
   startDesired(opts.delay ?? 0);
+}
+
+/** 曲の音符データを先に用意しておく(鳴らし始める瞬間の負担を減らす) */
+export function prepareMusic(id: SongId): void {
+  eventsByStep(songById(id));
 }
 
 /** 利用者が操作したときに呼ぶ(音を出してよくなる)。止まっていた曲があれば始める */
@@ -85,6 +90,19 @@ export function unlockMusic(): void {
     return;
   }
   if (!running) startDesired();
+}
+
+const stepCache = new Map<SongId, Map<number, NoteEvent[]>>();
+
+/** 曲の音符を、拍ごとにまとめたもの(曲ごとに1回だけ作る) */
+function eventsByStep(song: Song): Map<number, NoteEvent[]> {
+  let m = stepCache.get(song.id);
+  if (!m) {
+    m = new Map();
+    for (const e of buildEvents(song)) m.set(e.step, [...(m.get(e.step) ?? []), e]);
+    stepCache.set(song.id, m);
+  }
+  return m;
 }
 
 function startDesired(delay = 0): void {
@@ -100,8 +118,7 @@ function startDesired(delay = 0): void {
     if (ctx.state === 'suspended') return;
   }
   const song = songById(desired);
-  const byStep = new Map<number, NoteEvent[]>();
-  for (const e of buildEvents(song)) byStep.set(e.step, [...(byStep.get(e.step) ?? []), e]);
+  const byStep = eventsByStep(song);
   const bus = ctx.createGain();
   bus.gain.value = MASTER_GAIN;
   bus.connect(ctx.destination);

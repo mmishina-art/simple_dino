@@ -2,13 +2,14 @@
 // 画面のリフレッシュレートが違っても(60Hz / 120Hz)、ゲームの速さは変わらない。
 // 演出(土ぼこり・キラキラ・画面のゆれ・紙ふぶき)は、見た目だけ。動きを減らす設定のときは出さない。
 import {
-  BOOST_FRAMES, DT, bodyOf, newGame, progressPercent, scoreMultiplier, step, trackNearMiss, type GameState, type StageDef,
+  BOOST_FRAMES, bodyOf, newGame, progressPercent, scoreMultiplier, step, trackNearMiss, type GameState, type StageDef,
 } from './logic';
 import {
   advanceParticles, advancePopups, confetti, crash, dust, shakeOffset, sparkle, type Particle, type Popup,
 } from './fx';
 import { DINO_SCREEN_X, GROUND_Y, VIEW_H, VIEW_W, drawScene } from './render';
 import { meters } from './endless';
+import { alphaOf, lerp, tick } from './clock';
 import { themeOf } from './themes';
 
 export type Phase = 'ready' | 'playing' | 'paused' | 'dead' | 'cleared';
@@ -30,7 +31,6 @@ export interface RunInfo {
 
 export interface PlayHandlers {
   onJump(): void;
-  onLand(): void;
   /** たまごを取った。count はこの回に取った数、total はそのステージの数 */
   onEgg(count: number, total: number): void;
   /** 障害物をぎりぎりで越えた */
@@ -42,6 +42,8 @@ export interface PlayHandlers {
   /** 肉を取った。level は取ったあとのレベル */
   onMeat(level: number): void;
   onProgress(info: RunInfo): void;
+  /** 画面を離れて、自動でポーズした(再開の案内を出す) */
+  onPause(): void;
 }
 
 /** やられた・ゴールしたあと、結果を出すまでの間(フレーム数) */
@@ -54,6 +56,8 @@ const SHAKE_PX = 5;
 
 export class Player {
   private state: GameState;
+  /** ひとつ前のステップの状態(描くとき、いまの状態とのあいだを補う) */
+  private prev: GameState;
   phase: Phase = 'ready';
   private held = false;
   private pendingPress = false;
@@ -63,7 +67,8 @@ export class Player {
   private landedAt = -99;
   private endedFrames = 0;
   private readonly ctx: CanvasRenderingContext2D;
-  private readonly reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /** 動きを減らす設定。遊んでいる途中で変えても、すぐ反映する */
+  private readonly reducedQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
   private particles: Particle[] = [];
   private popups: Popup[] = [];
   private shakeLeft = 0;
@@ -74,6 +79,7 @@ export class Player {
     if (!ctx) throw new Error('canvas が使えません');
     this.ctx = ctx;
     this.state = newGame(stage);
+    this.prev = this.state;
     new ResizeObserver(() => this.resize()).observe(canvas);
     this.resize();
     document.addEventListener('visibilitychange', () => {
@@ -81,13 +87,14 @@ export class Player {
     });
   }
 
-  get stage(): StageDef {
-    return this.state.stage;
+  private get reduced(): boolean {
+    return this.reducedQuery.matches;
   }
 
   /** ステージを読み込んで、スタート前の状態にする */
   load(stage: StageDef): void {
     this.state = newGame(stage);
+    this.prev = this.state;
     this.phase = 'ready';
     this.held = false;
     this.pendingPress = false;
@@ -108,6 +115,7 @@ export class Player {
     this.phase = 'playing';
     this.last = performance.now();
     this.acc = 0;
+    this.prev = this.state;
     this.loop();
   }
 
@@ -115,8 +123,11 @@ export class Player {
     if (this.phase !== 'playing') return;
     this.phase = 'paused';
     this.held = false;
+    // 押したあとに隠れたとき、再開した瞬間に、押していないジャンプが出ないようにする
+    this.pendingPress = false;
     cancelAnimationFrame(this.raf);
     this.draw();
+    this.handlers.onPause();
   }
 
   /** ステージを離れる(ループを止める) */
@@ -137,13 +148,17 @@ export class Player {
 
   private resize(): void {
     const css = this.canvas.clientWidth || VIEW_W;
-    const width = Math.max(1, Math.round(css * (window.devicePixelRatio || 1)));
+    const density = window.devicePixelRatio || 1;
+    const width = Math.max(1, Math.round(css * density));
     this.canvas.width = width;
     this.canvas.height = Math.round((width * VIEW_H) / VIEW_W);
     this.draw();
   }
 
   private loop = (): void => {
+    // 動いているループは、いつも 1 つだけにする。「もういちど」を早く押すと、前のループがまだ残っていて、
+    // そのまま 2 つ・3 つと増えてしまい(押すたびに +1)、1 フレームに何度も描いて、重くなる
+    cancelAnimationFrame(this.raf);
     this.raf = requestAnimationFrame((t) => {
       const dt = Math.min(0.1, (t - this.last) / 1000);
       this.last = t;
@@ -157,13 +172,14 @@ export class Player {
   };
 
   private advance(dt: number): void {
-    this.acc += dt;
-    while (this.acc >= DT && this.state.status === 'running') {
-      const prev = this.state;
-      this.state = step(prev, { pressed: this.pendingPress, held: this.held || this.pendingPress });
+    const t = tick(this.acc, dt);
+    this.acc = t.acc;
+    for (let i = 0; i < t.steps && this.state.status === 'running'; i++) {
+      const before = this.state;
+      this.prev = before;
+      this.state = step(before, { pressed: this.pendingPress, held: this.held || this.pendingPress });
       this.pendingPress = false;
-      this.acc -= DT;
-      this.onStep(prev, this.state);
+      this.onStep(before, this.state);
     }
     this.report();
     if (this.state.status !== 'running') {
@@ -184,7 +200,6 @@ export class Player {
     }
     if (!prev.grounded && s.grounded) {
       this.landedAt = s.frame;
-      this.handlers.onLand();
       this.spawn(dust(feet.x, feet.y, 6, theme.groundLine, Math.random));
     }
     // 走っている間の、小さな土ぼこり
@@ -261,7 +276,12 @@ export class Player {
     const s = this.state;
     const theme = themeOf(s);
     const shake = this.reduced ? { x: 0, y: 0 } : shakeOffset(this.shakeLeft, SHAKE_FRAMES, SHAKE_PX, s.frame + this.shakeLeft);
+    // 走っている間は、ひとつ前のステップとのあいだを補って描く(60Hz でも 120Hz でも、なめらかに)
+    const smooth = this.phase === 'playing' && s.status === 'running';
+    const a = smooth ? alphaOf(this.acc) : 1;
     drawScene(this.ctx, this.canvas.width, s, theme, {
+      dist: smooth ? lerp(this.prev.dist, s.dist, a) : undefined,
+      y: smooth ? lerp(this.prev.y, s.y, a) : undefined,
       squash: s.frame - this.landedAt < SQUASH_FRAMES,
       particles: this.particles,
       popups: this.popups,

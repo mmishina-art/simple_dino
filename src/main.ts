@@ -9,8 +9,8 @@ import {
 } from './progress';
 import { STAGES } from './stages';
 import { setupInstallGuide } from './install';
-import { setupUpdateBanner } from './pwa';
-import { isMusicOn, setMusicOn, setMusicTempo, setScene, syncMusic, unlockMusic } from './music';
+import { checkForUpdate, setupUpdateBanner, type UpdateResult } from './pwa';
+import { isMusicOn, prepareMusic, setMusicOn, setMusicTempo, setScene, syncMusic, unlockMusic } from './music';
 import { isSoundOn, setSound, sfx, syncSound } from './sound';
 import { stageSongId, type SongId } from './songs';
 import { exportBackup, importBackup, load, migrateStorage, requestPersist, save } from './storage';
@@ -163,11 +163,21 @@ function show(screen: HTMLElement): void {
   stopTitle?.();
   stopTitle = screen === title ? startTitle($<HTMLCanvasElement>('title-canvas')) : undefined;
   if (screen === title || screen === select) setScene('title');
+  // タイトル画面に来たら、新版があるか確認する(前に確認したばかりなら見送る)
+  if (screen === title) void checkForUpdate();
 }
 
 // ---- ゲーム画面 ----
 
 const status = $('game-status');
+const progressBar = $('progress-bar');
+let barPercent = -1;
+/** 進み具合の棒の幅。毎フレームは書かない(値が変わったときだけ。書くたびに、画面の組み直しが起きるため) */
+function setBar(percent: number): void {
+  if (percent === barPercent) return;
+  barPercent = percent;
+  progressBar.style.setProperty('width', `${percent}%`);
+}
 const score = $('score');
 const boostLabel = $('boost');
 let lastBoost = 0;
@@ -177,7 +187,6 @@ const player = new Player(
   canvas,
   {
     onJump: () => sfx('jump'),
-    onLand: () => undefined,
     onEgg: (count, total) => {
       if (count > 0) sfx('egg');
       $('egg-count').textContent = `${count}/${total}`;
@@ -192,8 +201,10 @@ const player = new Player(
         renderBest();
         const line = newBest ? 'ハイスコア更新!' : `ハイスコア ${progress.endlessBest} 点`;
         const detail = `${meters} m 走った・肉 ${meats}個${topBoost > 0 ? `・最高 ×${scoreMultiplier(topBoost).toFixed(1)}` : ''}`;
+        // 画面では 2 行に分ける(せまい画面で、「・」の途中で折り返さないように)
+        const detailLines = `${meters} m 走った\n肉 ${meats}個${topBoost > 0 ? `・最高 ×${scoreMultiplier(topBoost).toFixed(1)}` : ''}`;
         status.textContent = `ゲームオーバー。${points}点。${detail}。${line}`;
-        showOverlay('ざんねん!', `${points} 点\n${detail}\n${line}`, [
+        showOverlay('ざんねん!', `${points} 点\n${detailLines}\n${line}`, [
           { label: 'もういちど', primary: true, run: () => restart() },
           { label: 'ステージ選択', away: true, run: () => closeStage() },
         ]);
@@ -242,9 +253,10 @@ const player = new Player(
       ]);
     },
     onMeat: () => sfx('meat'),
+    onPause: () => showOverlay('ポーズ中', '画面をタップするとつづきから', [{ label: 'つづける', primary: true, run: () => pressInput() }]),
     onProgress: (info) => {
       if (!current.endless) {
-        $('progress-bar').style.setProperty('width', `${Math.round(info.ratio * 100)}%`);
+        setBar(Math.round(info.ratio * 100));
         return;
       }
       // エンドレス: スコアと、肉のレベル・倍率、効き目の残り(棒)を出す。変わったときだけ書きかえる(毎フレームは書かない)
@@ -252,7 +264,7 @@ const player = new Player(
       if (score.textContent !== text) score.textContent = text;
       const label = info.boost > 0 ? `🍖${info.boost} ×${info.mult.toFixed(1)}` : '';
       if (boostLabel.textContent !== label) boostLabel.textContent = label;
-      $('progress-bar').style.setProperty('width', `${Math.round(info.boostRatio * 100)}%`);
+      setBar(Math.round(info.boostRatio * 100));
       game.classList.toggle('boosted', info.boost > 0);
       if (info.boost !== lastBoost) {
         lastBoost = info.boost;
@@ -308,7 +320,9 @@ function openStage(base: StageDef): void {
   hint.hidden = false;
   status.textContent = '';
   player.load(stage);
-  setScene(songIdOf(stage), { restart: true });
+  // 曲は走り出すときに鳴らす。それまでに音符を用意しておく
+  setScene(null);
+  prepareMusic(songIdOf(stage));
 }
 
 /** 曲の番号。エンドレスは専用の曲 */
@@ -329,7 +343,8 @@ function openEndless(): void {
   hint.hidden = false;
   status.textContent = '';
   player.load(current);
-  setScene('endless', { restart: true });
+  setScene(null);
+  prepareMusic('endless');
 }
 
 /** 進み具合の棒に、これまででいちばん進んだ場所の印をつけ、ベストを文字でも出す */
@@ -375,7 +390,7 @@ function openEnding(): void {
   hideOverlay();
   show(ending);
   setScene('ending', { restart: true, delay: 1.4 });
-  $('ending-stats').textContent = `ぜんぶで ${totalAttempts(progress)} 回、挑戦しました\nちびダイノが仲間になった! ステージ選択でえらべます`;
+  $('ending-stats').textContent = `ぜんぶで ${totalAttempts(progress)} 回、挑戦しました\nちびダイノが仲間になった!\nステージ選択でえらべます`;
   stopEnding?.();
   stopEnding = startEnding($<HTMLCanvasElement>('ending-canvas'));
   sfx('clear');
@@ -412,14 +427,25 @@ function pressInput(): void {
   }
 }
 
+// ダブルタップでの画面の拡大を防ぐ(iPhone)。CSS の touch-action だけでは、防げないことがある。
+// 前のタップから 0.35 秒以内の 2 回目のタップは、ブラウザの標準の動き(拡大)を止める。ボタンやリンクは、止めない(押せなくなるため)。
+// ピンチでの拡大は、そのまま使える。ジャンプは pointerdown で受けるので、影響しない。
+// ゲーム画面には付けない: そこは CSS の touch-action: none で、拡大されない。止められるタッチの受け皿(passive: false)が
+// あると、ブラウザは、タッチのたびに、その処理を待つ。連打したときの、画面の更新の遅れの原因になりうるため。
+let lastTouchEnd = 0;
+const guardDoubleTapZoom = (e: TouchEvent): void => {
+  const now = Date.now();
+  if (now - lastTouchEnd < 350 && !isControl(e.target) && e.cancelable) e.preventDefault();
+  lastTouchEnd = now;
+};
+for (const el of [title, select, ending]) el.addEventListener('touchend', guardDoubleTapZoom, { passive: false });
+
 game.addEventListener('pointerdown', (e) => {
   if (isControl(e.target)) return;
   e.preventDefault();
   pressInput();
 });
-for (const type of ['pointerup', 'pointercancel', 'pointerleave'] as const) {
-  game.addEventListener(type, () => player.release());
-}
+for (const type of ['pointerup', 'pointercancel', 'pointerleave'] as const) game.addEventListener(type, () => player.release());
 document.addEventListener('keydown', (e) => {
   if (game.hidden || e.repeat || !['Space', 'ArrowUp', 'KeyW'].includes(e.code)) return;
   if (isControl(e.target)) return;
@@ -428,11 +454,6 @@ document.addEventListener('keydown', (e) => {
 });
 document.addEventListener('keyup', (e) => {
   if (['Space', 'ArrowUp', 'KeyW'].includes(e.code)) player.release();
-});
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden && player.phase === 'paused') {
-    showOverlay('ポーズ中', '画面をタップするとつづきから', [{ label: 'つづける', primary: true, run: () => pressInput() }]);
-  }
 });
 $('game-back').addEventListener('click', closeStage);
 
@@ -456,7 +477,8 @@ $('select-back').addEventListener('click', () => show(title));
 $('endless-open').addEventListener('click', openEndless);
 
 // ブラウザは、利用者が操作するまで音を出せない。最初の操作で BGM(タイトル曲)を始める
-for (const type of ['click', 'touchend', 'pointerup', 'keydown'] as const) document.addEventListener(type, unlockMusic, { capture: true });
+// (止める処理はないので passive にして、ブラウザに待たせない)
+for (const type of ['click', 'touchend', 'pointerup', 'keydown'] as const) document.addEventListener(type, unlockMusic, { capture: true, passive: true });
 
 $('backup-export').addEventListener('click', () => {
   const blob = new Blob([exportBackup()], { type: 'application/json' });
@@ -475,7 +497,8 @@ $<HTMLInputElement>('backup-import').addEventListener('change', async (e) => {
     const n = importBackup(await file.text());
     syncSound();
     syncMusic();
-    character = isUnlockedChar(sanitizeCharacterId(load<unknown>('character', 'dino'))) ? sanitizeCharacterId(load<unknown>('character', 'dino')) : 'dino';
+    const saved = sanitizeCharacterId(load<unknown>('character', 'dino'));
+    character = isUnlockedChar(saved) ? saved : 'dino';
     progress = loadProgress();
     renderToggles();
     renderStageList();
@@ -488,10 +511,24 @@ $<HTMLInputElement>('backup-import').addEventListener('change', async (e) => {
 
 $('version').textContent = __APP_VERSION__;
 
+// 「新しい版を確認する」: すぐに確認して、結果を知らせる(新版があれば、「更新」ボタンが出る)
+const UPDATE_MESSAGES: Record<UpdateResult, string> = {
+  latest: 'これが最新の版です',
+  found: '新しい版が見つかりました。「更新」を押してください',
+  offline: '確認できませんでした(通信できません)',
+  unavailable: 'いまは確認できません',
+  skipped: 'これが最新の版です',
+};
+$('update-check').addEventListener('click', async () => {
+  const message = $('update-message');
+  message.textContent = '確認しています…';
+  message.textContent = UPDATE_MESSAGES[await checkForUpdate(true)];
+});
+
 // 隠しコマンド: バージョン表示を 3 秒以内に 7 回タップ → デバッグモードのオン/オフ
 const SECRET_TAPS = 7;
 let taps: number[] = [];
-$('version').parentElement?.addEventListener('click', () => {
+$('version').parentElement?.addEventListener('pointerup', () => {
   const now = Date.now();
   taps = [...taps.filter((t) => now - t < 3000), now];
   if (taps.length < SECRET_TAPS) return;

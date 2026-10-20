@@ -71,7 +71,7 @@ export function advanceParticles(list: readonly Particle[], dt: number): Particl
     const life = p.life - dt;
     if (life <= 0) continue;
     const vy = p.vy + p.gravity * dt;
-    out.push({ ...p, life, vx: p.vx, vy, x: p.x + p.vx * dt, y: p.y + vy * dt });
+    out.push({ ...p, life, vy, x: p.x + p.vx * dt, y: p.y + vy * dt });
   }
   return out;
 }

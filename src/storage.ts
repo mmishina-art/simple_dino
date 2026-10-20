@@ -71,6 +71,33 @@ export function exportBackup(): string {
 export function importBackup(text: string): number {
   const data = parseBackup(text);
   const keys = Object.keys(data).filter((k) => k.startsWith(`${PREFIX}-`) && k !== `${PREFIX}-debug`);
-  for (const key of keys) localStorage.setItem(key, data[key]);
+  try {
+    writeAll(localStorage, Object.fromEntries(keys.map((k) => [k, data[k]])));
+  } catch {
+    throw new Error('保存できませんでした。端末の空き容量を確かめてください(いまの記録は、そのままです)');
+  }
   return keys.length;
+}
+
+type Store = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+
+/** すべて書く。途中で失敗したら、書いた分を元にもどして、例外を投げる(記録が半端に残らないように) */
+export function writeAll(store: Store, data: Record<string, string>): void {
+  const before = new Map<string, string | null>();
+  try {
+    for (const [key, value] of Object.entries(data)) {
+      before.set(key, store.getItem(key));
+      store.setItem(key, value);
+    }
+  } catch (err) {
+    for (const [key, old] of before) {
+      try {
+        if (old === null) store.removeItem(key);
+        else store.setItem(key, old);
+      } catch {
+        // もどせなくても、残りはもどす
+      }
+    }
+    throw err;
+  }
 }

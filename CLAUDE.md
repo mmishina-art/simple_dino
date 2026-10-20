@@ -80,7 +80,7 @@ Vite + TypeScript + vite-plugin-pwa + Vitest + Playwright + ESLint。UI フレ�
   - 暗い固定: 世界観重視のゲーム向け。`theme-color` / `background_color` も暗い色に
 - `[hidden] { display: none !important; }` を残す。
 - スマホ縦画面を基準(`max-width` 480px で中央寄せ)。タップ領域は 44px 以上。
-- ズーム: ピンチ拡大は許可し、ダブルタップ拡大だけ `touch-action: manipulation` で防ぐ。viewport に `user-scalable=no` / `maximum-scale` を入れない(`check:dist` が検出する)。
+- ズーム: ピンチ拡大は許可し、ダブルタップ拡大だけ `touch-action: manipulation`(すべての要素に付ける)で防ぐ。iPhone はそれだけで防げないことがあるので、`touchend` が 0.35 秒以内に続いたら `preventDefault()` する補助も入れる(ボタン・リンクは除く。タップの数え方は `click` でなく `pointerup` を使う)。viewport に `user-scalable=no` / `maximum-scale` を入れない(`check:dist` が検出する)。
 - `prefers-reduced-motion: reduce` でアニメーションを無効化する。
 - アクセシビリティ: 結果は `aria-live` 領域でも読み上げる。ボタンに `aria-label` / `aria-pressed`。色だけで状態を伝えない。
 - 効果音と BGM は Web Audio で合成(音声ファイルを持たない)。オン/オフ設定を必ず用意する。
