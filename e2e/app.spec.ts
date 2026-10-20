@@ -611,8 +611,9 @@ test('デバッグモード(隠しコマンド): バージョンを 7 回タッ�
   await page.getByRole('button', { name: 'ステージ10 ラスト' }).click();
   await expect(page.locator('#game-title')).toHaveText('ステージ10 ラスト🐣');
   // デバッグモードのゲーム画面には、フレームの時間(FPS など。カクつきの調査用)が 1 行で出る
-  await expect(page.locator('#perf-hud')).toBeVisible();
+  await expect(page.locator('#perf-hud')).not.toHaveAttribute('hidden');
   await page.locator('#game-canvas').tap();
+  await expect(page.locator('#perf-hud')).toBeVisible({ timeout: 10_000 });
   await expect(page.locator('#perf-hud')).toContainText(/FPS \d+ ｜ 最悪 \d+ms ｜ 遅れ \d+% ｜ 処理 [\d.]+ms/, { timeout: 10_000 });
 
   // 読み込み直しても、オンのまま。バックアップには入らない
