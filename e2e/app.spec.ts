@@ -728,3 +728,25 @@ test('ダブルタップでの拡大を防ぐ: 0.35 秒以内の 2 回目のタ�
   // CSS でも、すべての要素で、ダブルタップ拡大だけを防いでいる
   expect(await page.evaluate(() => getComputedStyle(document.querySelector('.title-lead') as Element).touchAction)).toBe('manipulation');
 });
+
+test('デバッグモード: 入力の受け方(pointerdown / touchstart)を切り替えても、タップでスタートでき、入力の記録が出る', async ({ page }) => {
+  await page.addInitScript((id) => {
+    localStorage.setItem(`${id}-debug`, 'true');
+    localStorage.setItem(`${id}-music`, 'false');
+  }, APP_ID);
+  await page.goto('/');
+  await toSelect(page);
+  await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
+  await expect(page.locator('#input-method')).toHaveText('入力: pointerdown');
+  await expect(page.locator('#perf-hud')).toContainText('入力 まだなし ｜ 方式 pointerdown');
+  await page.locator('#input-method').click();
+  await expect(page.locator('#input-method')).toHaveText('入力: touchstart');
+  await expect(page.locator('#perf-hud')).toContainText('方式 touchstart');
+  // touchstart で受けても、タップ(タッチ)でスタートできる
+  const box = (await page.locator('#game-canvas').boundingBox())!;
+  await page.touchscreen.tap(box.x + box.width / 2, box.y + 60);
+  await expect(page.locator('#game-hint')).toBeHidden();
+  // 2 回目のタップ(ジャンプ)のあとに、届くまでの遅れの記録が出る
+  await page.touchscreen.tap(box.x + box.width / 2, box.y + 60);
+  await expect(page.locator('#perf-hud')).toContainText(/入力 届くまで 平均 [\d.]+ms 最大 [\d.]+ms ｜ 受付の処理 最大 [\d.]+ms ｜ 方式 touchstart/);
+});

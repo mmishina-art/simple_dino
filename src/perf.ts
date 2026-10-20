@@ -14,6 +14,8 @@ export interface PerfSummary {
   stallPct: number;
   /** 「遅れ」が起きる間隔の目安(秒)。遅れがなければ null。いつも同じ間隔なら、決まった処理(タイマーなど)が怪しい */
   lateEverySec: number | null;
+  /** 1 フレームの処理(ゲームの処理と描画)が、いちばん長かった時間(ミリ秒) */
+  workMaxMs: number;
   /** タップがあったフレームの数と、そのうち遅れたフレームの割合(%)。タップがなければ null */
   tapFrames: number;
   lateWithTapPct: number | null;
@@ -71,6 +73,7 @@ export class FrameStats {
       worstMs: sorted[n - 1],
       jankPct: (late / n) * 100,
       workMs: work,
+      workMaxMs: Math.max(...this.works.slice(0, n)),
       stallPct: (gaps.filter((g) => g > median * 3).length / n) * 100,
       lateEverySec: late > 0 ? total / late / 1000 : null,
       tapFrames: withTap.length,
@@ -83,6 +86,47 @@ export class FrameStats {
 const pctText = (v: number | null): string => (v === null ? '--' : `${Math.round(v)}%`);
 
 export const formatPerf = (s: PerfSummary): string =>
-  `FPS ${Math.round(s.fps)} ｜ 最悪 ${Math.round(s.worstMs)}ms ｜ 遅れ ${Math.round(s.jankPct)}% ｜ 処理 ${s.workMs.toFixed(1)}ms\n` +
+  `FPS ${Math.round(s.fps)} ｜ 最悪 ${Math.round(s.worstMs)}ms ｜ 遅れ ${Math.round(s.jankPct)}% ｜ 処理 ${s.workMs.toFixed(1)}ms(最大 ${s.workMaxMs.toFixed(1)})\n` +
   `長い停止 ${Math.round(s.stallPct)}% ｜ 遅れの間隔 ${s.lateEverySec === null ? '--' : `${s.lateEverySec.toFixed(1)}秒`}\n` +
   `タップあり ${s.tapFrames}回で遅れ ${pctText(s.lateWithTapPct)} ｜ なしで遅れ ${pctText(s.lateNoTapPct)}`;
+
+/** タップ(入力)ごとの、届くまでの遅れと、受け付けの処理にかかった時間。直近の size 回 */
+export class InputStats {
+  private readonly latencies: number[] = [];
+  private readonly handlers: number[] = [];
+
+  constructor(private readonly size = 30) {}
+
+  /** latencyMs: 画面をさわってから、アプリの処理が始まるまで。handlerMs: 受け付けの処理にかかった時間 */
+  record(latencyMs: number, handlerMs: number): void {
+    // 時計が合わない値(負の数・極端に大きな数)は、数えない
+    if (!(latencyMs >= -5 && latencyMs < 2000)) return;
+    this.latencies.push(Math.max(0, latencyMs));
+    this.handlers.push(handlerMs);
+    if (this.latencies.length > this.size) {
+      this.latencies.shift();
+      this.handlers.shift();
+    }
+  }
+
+  reset(): void {
+    this.latencies.length = 0;
+    this.handlers.length = 0;
+  }
+
+  summary(): { count: number; latencyAvgMs: number; latencyMaxMs: number; handlerMaxMs: number } | null {
+    const n = this.latencies.length;
+    if (n === 0) return null;
+    return {
+      count: n,
+      latencyAvgMs: this.latencies.reduce((a, b) => a + b, 0) / n,
+      latencyMaxMs: Math.max(...this.latencies),
+      handlerMaxMs: Math.max(...this.handlers),
+    };
+  }
+}
+
+export const formatInput = (s: ReturnType<InputStats['summary']>, method: string): string =>
+  s === null
+    ? `入力 まだなし ｜ 方式 ${method}`
+    : `入力 届くまで 平均 ${s.latencyAvgMs.toFixed(1)}ms 最大 ${s.latencyMaxMs.toFixed(1)}ms ｜ 受付の処理 最大 ${s.handlerMaxMs.toFixed(1)}ms ｜ 方式 ${method}`;
