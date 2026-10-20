@@ -228,21 +228,35 @@ test('BGM: タイトルの曲が鳴り、ステージを開くとそのステー
   await page.getByRole('button', { name: 'もういちど' }).click();
   await expect.poll(songs).toEqual(['title', 'stage1', 'stage1']);
   // ゲーム画面の BGM ボタンでオフにする
-  await page.locator('#music-button-game').click();
-  await expect(page.locator('#music-button-game')).toHaveAttribute('aria-pressed', 'false');
+  await page.locator('#sound-button-game').click();
+  await expect(page.locator('#sound-button-game')).toHaveAttribute('aria-pressed', 'false');
   await page.getByRole('button', { name: 'ステージ選択にもどる' }).click();
   await page.waitForTimeout(300);
   expect((await songs()).length).toBe(3);
 });
 
-test('BGM のオン/オフは、タイトルで切り替えられ、再読み込みしても残る', async ({ page }) => {
+test('音のオン/オフは 1 つ。タイトルで切り替えると、効果音と BGM の両方が切れて、再読み込みしても残る', async ({ page }) => {
   await page.goto('/');
-  const button = page.locator('#music-button');
+  const button = page.locator('#sound-button');
   await expect(button).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#music-button')).toHaveCount(0);
   await button.click();
   await expect(button).toHaveAttribute('aria-pressed', 'false');
+  expect(await page.evaluate((id) => [localStorage.getItem(`${id}-sound`), localStorage.getItem(`${id}-music`)], APP_ID)).toEqual(['false', 'false']);
   await page.reload();
-  await expect(page.locator('#music-button')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#sound-button')).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('昔の記録で、効果音と BGM の片方だけが切れていたら、オフにそろえる', async ({ page }) => {
+  await page.addInitScript((id) => {
+    if (!localStorage.getItem(`${id}-sound`)) {
+      localStorage.setItem(`${id}-sound`, 'true');
+      localStorage.setItem(`${id}-music`, 'false');
+    }
+  }, APP_ID);
+  await page.goto('/');
+  await expect(page.locator('#sound-button')).toHaveAttribute('aria-pressed', 'false');
+  expect(await page.evaluate((id) => localStorage.getItem(`${id}-sound`), APP_ID)).toBe('false');
 });
 
 test('たまごの数が画面に出る。ステージごとにベストの進み具合も覚えていて、再読み込みしても残る', async ({ page }) => {

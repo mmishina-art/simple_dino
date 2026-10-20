@@ -490,7 +490,7 @@ button.link {
   justify-content: flex-start;
 }
 
-.hud-music {
+.hud-sound {
   margin-left: auto;
 }
 
@@ -568,7 +568,7 @@ button.link {
   white-space: nowrap;
 }
 
-.hud-music {
+.hud-sound {
   margin-left: 0;
 }
 
