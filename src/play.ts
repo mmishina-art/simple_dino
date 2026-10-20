@@ -42,6 +42,8 @@ export interface PlayHandlers {
   /** 肉を取った。level は取ったあとのレベル */
   onMeat(level: number): void;
   onProgress(info: RunInfo): void;
+  /** 画面を離れて、自動でポーズした(再開の案内を出す) */
+  onPause(): void;
 }
 
 /** やられた・ゴールしたあと、結果を出すまでの間(フレーム数) */
@@ -65,7 +67,8 @@ export class Player {
   private landedAt = -99;
   private endedFrames = 0;
   private readonly ctx: CanvasRenderingContext2D;
-  private readonly reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /** 動きを減らす設定。遊んでいる途中で変えても、すぐ反映する */
+  private readonly reducedQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
   private particles: Particle[] = [];
   private popups: Popup[] = [];
   private shakeLeft = 0;
@@ -82,6 +85,10 @@ export class Player {
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && this.phase === 'playing') this.pause();
     });
+  }
+
+  private get reduced(): boolean {
+    return this.reducedQuery.matches;
   }
 
   /** ステージを読み込んで、スタート前の状態にする */
@@ -120,6 +127,7 @@ export class Player {
     this.pendingPress = false;
     cancelAnimationFrame(this.raf);
     this.draw();
+    this.handlers.onPause();
   }
 
   /** ステージを離れる(ループを止める) */

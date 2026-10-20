@@ -1,7 +1,7 @@
 // Canvas への描画。ゲームの状態(GameState)を絵にするだけで、ルールには触れない。
 // 座標は論理 px(横 VIEW_W × 縦 VIEW_H)。実際の画面の大きさに合わせて、scale 倍で描く。
 // ドット絵がにじまないよう、四角は端末の px にそろえて塗る。
-import { DINO_BODY, EGG_H, EGG_W, MEAT_H, MEAT_W, bodyOf, type GameState, type ObstacleKind } from './logic';
+import { DINO_BODY, EGG_H, EGG_W, MEAT_H, MEAT_W, OBSTACLE_SIZES, bodyOf, type GameState, type ObstacleKind } from './logic';
 import type { Particle, Popup } from './fx';
 import { DINO, DINO_CHIBI, EGG, MEAT, SPRITES, squashed, type Sprite } from './sprites';
 import { THEMES, type Theme } from './themes';
@@ -362,7 +362,7 @@ export function drawTitle(c: CanvasRenderingContext2D, width: number, t: number)
   let hop = 0;
   for (let k = 0; k < 3; k++) {
     const kind: ObstacleKind = (k + Math.floor(d / GAP)) % 3 === 1 ? 'R' : 'S';
-    const size = kind === 'R' ? { w: 26, h: 20 } : { w: 14, h: 26 };
+    const size = OBSTACLE_SIZES[kind];
     const x = DINO_SCREEN_X + 150 + k * GAP - (d % GAP);
     sprite(p, SPRITES[kind], x, GROUND_Y - size.h, ...obstacleColors(kind, theme));
     const near = (x - DINO_SCREEN_X - 24) / 46;
