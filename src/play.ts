@@ -139,6 +139,8 @@ export class Player {
     if (this.phase !== 'playing') return;
     this.phase = 'paused';
     this.held = false;
+    // 押したあとに隠れたとき、再開した瞬間に、押していないジャンプが出ないようにする
+    this.pendingPress = false;
     cancelAnimationFrame(this.raf);
     this.draw();
   }
