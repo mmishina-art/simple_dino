@@ -582,20 +582,24 @@ test('デバッグモード(隠しコマンド): バージョンを 7 回タッ�
   // デバッグモードのゲーム画面には、フレームの時間(カクつきの調査用)が出る
   await expect(page.locator('#perf-hud')).toBeVisible();
   // 表示をタップするたびに、描き方(画面の密度)が切り替わる: 自動 → ×2 → ×1 → 描かない → 自動。カクつきの原因の切り分け用
-  const canvasWidth = (): Promise<number> => page.evaluate(() => (document.getElementById('game-canvas') as HTMLCanvasElement).width);
-  const auto = await canvasWidth();
+  // canvas の幅は、そのときの表示の幅 × 密度で決まる(画面の幅は、読み込み中に変わることがあるので、そのつど比べる)
+  const widthMatches = (density: number | null): Promise<boolean> =>
+    page.evaluate((d) => {
+      const c = document.getElementById('game-canvas') as HTMLCanvasElement;
+      return c.width === Math.round(c.clientWidth * Math.min(window.devicePixelRatio, d ?? Infinity));
+    }, density);
+  await expect.poll(() => widthMatches(null)).toBe(true);
   await page.locator('#perf-hud').click();
   await expect(page.locator('#perf-hud')).toContainText('密度 ×2');
-  const x2 = await canvasWidth();
-  expect(x2).toBeLessThan(auto);
+  await expect.poll(() => widthMatches(2)).toBe(true);
   await page.locator('#perf-hud').click();
   await expect(page.locator('#perf-hud')).toContainText('密度 ×1');
-  expect(await canvasWidth()).toBeLessThan(x2);
+  await expect.poll(() => widthMatches(1)).toBe(true);
   await page.locator('#perf-hud').click();
   await expect(page.locator('#perf-hud')).toContainText('描かない');
   await page.locator('#perf-hud').click();
   await expect(page.locator('#perf-hud')).toContainText('密度 自動');
-  expect(await canvasWidth()).toBe(auto);
+  await expect.poll(() => widthMatches(null)).toBe(true);
   await page.locator('#game-canvas').tap();
   await expect(page.locator('#perf-hud')).toContainText(/FPS \d+ ｜ 最悪 \d+ms ｜ 遅れ \d+% ｜ 処理 [\d.]+ms/, { timeout: 10_000 });
 
