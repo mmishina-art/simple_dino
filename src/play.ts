@@ -76,6 +76,9 @@ export class Player {
   private readonly minClear = new Map<number, number>();
   /** デバッグモードで、フレームの時間を記録する */
   perf = false;
+  /** デバッグモードの切り分け用: 描く画面の密度の上限(null なら端末のまま)と、描くのをやめる指定 */
+  private densityCap: number | null = null;
+  private drawOff = false;
   private readonly stats = new FrameStats(120);
   private statsSince = 0;
 
@@ -150,9 +153,17 @@ export class Player {
     this.held = false;
   }
 
+  /** デバッグモードの切り分け用: 描く画面の密度の上限(null なら端末のまま)。off が true なら、描くのをやめる(ゲームの進行だけ) */
+  setRenderMode(densityCap: number | null, off = false): void {
+    this.densityCap = densityCap;
+    this.drawOff = off;
+    this.resize();
+  }
+
   private resize(): void {
     const css = this.canvas.clientWidth || VIEW_W;
-    const width = Math.max(1, Math.round(css * (window.devicePixelRatio || 1)));
+    const density = Math.min(window.devicePixelRatio || 1, this.densityCap ?? Infinity);
+    const width = Math.max(1, Math.round(css * density));
     this.canvas.width = width;
     this.canvas.height = Math.round((width * VIEW_H) / VIEW_W);
     this.draw();
@@ -293,6 +304,7 @@ export class Player {
   }
 
   private draw(): void {
+    if (this.drawOff) return;
     const s = this.state;
     const theme = themeOf(s);
     const shake = this.reduced ? { x: 0, y: 0 } : shakeOffset(this.shakeLeft, SHAKE_FRAMES, SHAKE_PX, s.frame + this.shakeLeft);

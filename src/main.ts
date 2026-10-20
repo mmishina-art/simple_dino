@@ -118,6 +118,11 @@ function renderStageList(): void {
   // デバッグモードのときだけ、フレームの時間を記録して、ゲーム画面に出す
   player.perf = debug;
   perfHud.hidden = !debug;
+  if (!debug && renderMode !== 0) {
+    renderMode = 0;
+    player.setRenderMode(null);
+  }
+  showPerf();
   const list = $('stage-list');
   list.replaceChildren();
   for (const stage of STAGES) {
@@ -175,6 +180,18 @@ function show(screen: HTMLElement): void {
 
 const status = $('game-status');
 const perfHud = $('perf-hud');
+/** デバッグモードの切り分け: 表示の左下をタップするたびに、描き方を切り替える(自動 → 密度 2 → 密度 1 → 描かない) */
+const RENDER_MODES: readonly { label: string; cap: number | null; off: boolean }[] = [
+  { label: '密度 自動', cap: null, off: false },
+  { label: '密度 ×2', cap: 2, off: false },
+  { label: '密度 ×1', cap: 1, off: false },
+  { label: '描かない', cap: null, off: true },
+];
+let renderMode = 0;
+let lastPerf = '';
+const showPerf = (): void => {
+  perfHud.textContent = `${lastPerf || 'FPS --'} ｜ ${RENDER_MODES[renderMode].label}`;
+};
 const progressBar = $('progress-bar');
 let barPercent = -1;
 /** 進み具合の棒の幅。毎フレームは書かない(値が変わったときだけ。書くたびに、画面の組み直しが起きるため) */
@@ -258,7 +275,8 @@ const player = new Player(
     },
     onMeat: () => sfx('meat'),
     onPerf: (summary) => {
-      perfHud.textContent = formatPerf(summary);
+      lastPerf = formatPerf(summary);
+      showPerf();
     },
     onProgress: (info) => {
       if (!current.endless) {
@@ -519,6 +537,13 @@ $<HTMLInputElement>('backup-import').addEventListener('change', async (e) => {
 });
 
 $('version').textContent = __APP_VERSION__;
+
+perfHud.addEventListener('click', () => {
+  renderMode = (renderMode + 1) % RENDER_MODES.length;
+  const m = RENDER_MODES[renderMode];
+  player.setRenderMode(m.cap, m.off);
+  showPerf();
+});
 
 // 「新しい版を確認する」: すぐに確認して、結果を知らせる(新版があれば、「更新」ボタンが出る)
 const UPDATE_MESSAGES: Record<UpdateResult, string> = {
