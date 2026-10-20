@@ -542,6 +542,7 @@ perfHud.addEventListener('click', () => {
   renderMode = (renderMode + 1) % RENDER_MODES.length;
   const m = RENDER_MODES[renderMode];
   player.setRenderMode(m.cap, m.off);
+  lastPerf = ''; // 新しい描き方の数字が出るまで、前の数字は出さない
   showPerf();
 });
 

@@ -12,7 +12,7 @@ export interface PerfSummary {
   workMs: number;
 }
 
-/** 直近 size フレームの、間隔と処理時間を持つ */
+/** 直近 size フレームの、間隔と処理時間を持つ(デバッグモードの表示は、走っているあいだの、直近の 3 秒ぶん) */
 export class FrameStats {
   private readonly gaps: number[];
   private readonly works: number[];
