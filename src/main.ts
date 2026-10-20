@@ -201,8 +201,10 @@ const player = new Player(
         renderBest();
         const line = newBest ? 'ハイスコア更新!' : `ハイスコア ${progress.endlessBest} 点`;
         const detail = `${meters} m 走った・肉 ${meats}個${topBoost > 0 ? `・最高 ×${scoreMultiplier(topBoost).toFixed(1)}` : ''}`;
+        // 画面では 2 行に分ける(せまい画面で、「・」の途中で折り返さないように)
+        const detailLines = `${meters} m 走った\n肉 ${meats}個${topBoost > 0 ? `・最高 ×${scoreMultiplier(topBoost).toFixed(1)}` : ''}`;
         status.textContent = `ゲームオーバー。${points}点。${detail}。${line}`;
-        showOverlay('ざんねん!', `${points} 点\n${detail}\n${line}`, [
+        showOverlay('ざんねん!', `${points} 点\n${detailLines}\n${line}`, [
           { label: 'もういちど', primary: true, run: () => restart() },
           { label: 'ステージ選択', away: true, run: () => closeStage() },
         ]);
@@ -387,7 +389,7 @@ function openEnding(): void {
   hideOverlay();
   show(ending);
   setScene('ending', { restart: true, delay: 1.4 });
-  $('ending-stats').textContent = `ぜんぶで ${totalAttempts(progress)} 回、挑戦しました\nちびダイノが仲間になった! ステージ選択でえらべます`;
+  $('ending-stats').textContent = `ぜんぶで ${totalAttempts(progress)} 回、挑戦しました\nちびダイノが仲間になった!\nステージ選択でえらべます`;
   stopEnding?.();
   stopEnding = startEnding($<HTMLCanvasElement>('ending-canvas'));
   sfx('clear');

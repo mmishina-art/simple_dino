@@ -296,7 +296,7 @@ test('エンドレス: ステージ選択から始められ、ぶつかると走
   await page.locator('#game-canvas').tap();
   await expect(page.locator('#overlay-title')).toHaveText('ざんねん!', { timeout: 10_000 });
   await expect(page.locator('#overlay-text')).toContainText(/\d+ 点/);
-  await expect(page.locator('#overlay-text')).toContainText(/\d+ m 走った・肉 0個/);
+  await expect(page.locator('#overlay-text')).toContainText(/\d+ m 走った\s*肉 0個/);
   await expect(page.locator('#overlay-text')).toContainText('ハイスコア更新!');
   // もういちど: すぐに新しいコースで走り出す
   await page.getByRole('button', { name: 'もういちど' }).click();

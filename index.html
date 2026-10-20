@@ -30,19 +30,19 @@
           </div>
         </div>
         <h1 class="title-logo">ダイノラン</h1>
-        <p class="muted title-lead">タップでジャンプ。サボテンや岩をよけて、旗(ゴール)までたどりつこう。</p>
+        <p class="muted title-lead ja">タップでジャンプ。<wbr>サボテンや岩をよけて、<wbr>旗(ゴール)まで<wbr>たどりつこう。</p>
         <button id="play-button" type="button" class="primary play-button">あそぶ</button>
         <p id="title-summary" class="muted" aria-live="polite"></p>
 
         <details class="backup">
           <summary>記録のバックアップ</summary>
-          <p class="muted">記録は、このブラウザの中にだけ保存されています。ファイルに残しておくと、消えたときに戻せます。</p>
+          <p class="muted ja">記録は、このブラウザの中にだけ<wbr>保存されています。<wbr>ファイルに残しておくと、<wbr>消えたときに戻せます。</p>
           <button id="backup-export" type="button">ファイルに書き出す</button>
           <label class="file-button">ファイルから読み込む<input id="backup-import" type="file" accept="application/json,.json" hidden></label>
           <p id="backup-message" class="muted" role="status"></p>
         </details>
 
-        <button id="install-open" type="button" class="link">📲 アプリとしてインストールする方法</button>
+        <button id="install-open" type="button" class="link ja">📲 アプリとして<wbr>インストールする方法</button>
 
         <p class="muted version">v<span id="version"></span></p>
         <button id="update-check" type="button" class="link">新しい版を確認する</button>
@@ -55,19 +55,19 @@
           <button id="select-back" type="button" aria-label="タイトルにもどる">もどる</button>
           <h2 class="select-title">ステージをえらぶ</h2>
         </header>
-        <p id="debug-note" class="muted" hidden>デバッグモード: ちびダイノと、全ステージを選べます</p>
+        <p id="debug-note" class="muted ja" hidden>デバッグモード: ちびダイノと、<wbr>全ステージを選べます</p>
         <div id="character-picker" class="character-picker" role="group" aria-label="キャラ"></div>
         <p id="progress-summary" class="progress-summary" aria-live="polite"></p>
         <ol id="stage-list" class="stage-list" aria-label="ステージ"></ol>
         <button id="endless-open" type="button" class="endless-button">♾ エンドレス <span id="endless-best" class="muted"></span></button>
-        <button id="ending-open" type="button" hidden>🎉 エンディングをもういちど見る</button>
+        <button id="ending-open" type="button" class="ja" hidden>🎉 エンディングを<wbr>もういちど見る</button>
       </section>
 
       <!-- エンディング(全ステージクリア) -->
       <section id="screen-ending" class="ending" hidden>
         <canvas id="ending-canvas" class="game-canvas" role="img" aria-label="夜があけて、恐竜がゴールの旗の前でよろこんでいます"></canvas>
-        <h2>ぜんぶクリア! おめでとう!</h2>
-        <p>10のステージを走りぬけて、恐竜はとうとう朝を迎えました。<br />サボテンも岩も、もうこわくありません。</p>
+        <h2 class="ja">ぜんぶクリア! おめでとう!</h2>
+        <p class="ja">10のステージを走りぬけて、<wbr>恐竜はとうとう<wbr>朝を迎えました。<br />サボテンも岩も、<wbr>もうこわくありません。</p>
         <p id="ending-stats" class="muted"></p>
         <button id="ending-close" type="button" class="primary">ステージ選択へ</button>
       </section>
@@ -106,14 +106,14 @@
     <!-- インストール方法（最初の画面から開く） -->
     <dialog id="install-dialog" class="install-dialog" aria-labelledby="install-title">
       <h2 id="install-title">ホーム画面に追加して使う</h2>
-      <p class="muted">インストールすると、ホーム画面から開けて、オフラインでも使えます。</p>
+      <p class="muted">インストールすると、<wbr>ホーム画面から開けて、<wbr>オフラインでも使えます。</p>
       <button id="install-now" type="button" class="primary" hidden>今すぐインストール</button>
 
       <details data-platform="ios">
         <summary>iPhone / iPad</summary>
         <ol>
           <li><strong>Safari</strong> でこのページを開く</li>
-          <li>共有ボタン(□から↑が出ているマーク)をタップ</li>
+          <li>共有ボタン<wbr>(□から↑が出ているマーク)<wbr>をタップ</li>
           <li>「<strong>ホーム画面に追加</strong>」を選ぶ</li>
           <li>右上の「追加」をタップ</li>
         </ol>
@@ -123,14 +123,14 @@
         <ol>
           <li><strong>Chrome</strong> でこのページを開く</li>
           <li>右上のメニュー(⋮)をタップ</li>
-          <li>「<strong>アプリをインストール</strong>」または「ホーム画面に追加」を選ぶ</li>
+          <li>「<strong>アプリをインストール</strong>」または<wbr>「ホーム画面に追加」を選ぶ</li>
           <li>「インストール」をタップ</li>
         </ol>
       </details>
       <details data-platform="pc">
         <summary>パソコン(Chrome / Edge)</summary>
         <ol>
-          <li>アドレスバーの右端にあるインストールのマークをクリック</li>
+          <li>アドレスバーの右端にある<wbr>インストールのマークをクリック</li>
           <li>「<strong>インストール</strong>」を選ぶ</li>
         </ol>
       </details>
