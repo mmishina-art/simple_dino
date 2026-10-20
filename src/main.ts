@@ -158,8 +158,8 @@ function renderStageList(): void {
   const stars = `★ ${totalStars(progress, STAGES.map((s) => s.eggs.length))}/${STAGES.length * 3}`;
   $('progress-summary').textContent = done ? `★ ぜんぶクリア! (${STAGES.length}/${STAGES.length}) ・ ${stars}` : `クリア ${progress.cleared.length}/${STAGES.length} ・ ${stars}`;
   $('ending-open').hidden = !done || character !== 'dino';
-  // エンドレスは、ダイノだけ(速さを、ステージごとに決めているため)。ダイノで全ステージをクリアすると遊べる(ちびダイノと同じ)
-  $('endless-open').hidden = character !== 'dino' || !(debug || done);
+  // エンドレスは、ダイノで全ステージをクリアすると遊べる(ちびダイノと同じ)。ちびダイノを選んでいるときも出る(コースはキャラによらず同じ。ハイスコアはキャラごと)
+  $('endless-open').hidden = !isUnlockedChar('chibi');
   $('endless-best').textContent = progress.endlessBest > 0 ? `ハイスコア ${progress.endlessBest} 点` : 'ハイスコアなし';
   $('title-summary').textContent = progress.cleared.length > 0 ? `つづき: ${done ? '★ ぜんぶクリア!' : `クリア ${progress.cleared.length}/${STAGES.length}`}` : '';
 }
