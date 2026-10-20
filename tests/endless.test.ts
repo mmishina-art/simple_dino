@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CHUNKS, MAX_SPEED, mulberry32, START_SPEED, THEME_SPAN, createEndless, endlessObstacles, endlessSpeed, endlessTheme, meters, tierAt, tierStartSpeed } from '../src/endless';
-import { BOOST_MAX, DINO_H, DT, GRAVITY_HOLD, JUMP_V, MEAT_PICKUP, MEAT_W, approachFactor, boostTarget, newGame, progressPercent, step, type StageDef } from '../src/logic';
+import { BOOST_BODIES, BOOST_MAX, DT, GRAVITY_HOLD, JUMP_V, MEAT_PICKUP, MEAT_W, approachFactor, boostTarget, newGame, progressPercent, step, type StageDef } from '../src/logic';
 import { parseLayout } from '../src/stages';
 import { findPlan } from './solver';
 
@@ -109,17 +109,18 @@ describe('どの順番でつないでも、かならず越えられる', () => {
     const speeds = [...SPEEDS.filter((v) => v >= tierStartSpeed(chunk.tier)), tierStartSpeed(chunk.tier)];
     for (const speed of speeds) {
       const stage: StageDef = { id: 0, name: 'chunk', speed, ...parseLayout(speed, `1500 ${chunk.layout} 1500`), eggs: [] };
-      expect(findPlan(stage, 6), `${speed}px/s`).not.toBeNull();
+      // 肉なしのとき(レベル 0 の体)
+      expect(findPlan(stage, 6, undefined, undefined, () => 0), `${speed}px/s`).not.toBeNull();
     }
   });
 
   it.each([1, 2, 3, 4, 5, 6])('種 %i のコースを、はじめから 25000px まで(だんだん速くなる)、判定を 4px 厳しくしても越えられる', (seed) => {
-    expect(findPlan(fixedCourse(seed, 25000), 4)).not.toBeNull();
+    expect(findPlan(fixedCourse(seed, 25000), 4, undefined, undefined, () => 0)).not.toBeNull();
   }, 60_000);
 
   it('見つけた押し方で、本物のエンドレス(step)を、ずっと走りつづけられる', () => {
     const seed = 11;
-    const plan = findPlan(fixedCourse(seed, 20000), 4);
+    const plan = findPlan(fixedCourse(seed, 20000), 4, undefined, undefined, () => 0);
     expect(plan).not.toBeNull();
     // 途中の肉を取ると、速さが変わって、押し方がずれる。ここでは、走りの計算がソルバーと一致するか見たいので、肉は置かない
     const real = createEndless(seed);
@@ -170,14 +171,15 @@ function factorsFor(levelAt: (frame: number) => number, frames: number): (frame:
   return (frame) => list[Math.min(frame, frames)];
 }
 
-describe('肉で速くなっても、かならず越えられる', () => {
-  const TOP = boostTarget(BOOST_MAX);
-
-  it.each(CHUNKS.map((c) => [c.layout, c] as const))('部品「%s」は、いちばん速い肉のレベルでも、判定を 6px 厳しくしても越えられる', (_name, chunk) => {
-    // 部品は、肉なしの速さ(base)で並べてある。肉で TOP 倍になると、時間で見たすきまは、1/TOP にちぢむ
-    for (const base of [tierStartSpeed(chunk.tier), 320, MAX_SPEED].filter((v) => v >= tierStartSpeed(chunk.tier))) {
-      const stage: StageDef = { id: 0, name: 'chunk', speed: base * TOP, ...parseLayout(base, `1500 ${chunk.layout} 1500`), eggs: [] };
-      expect(findPlan(stage, 6), `base ${base}px/s × ${TOP}`).not.toBeNull();
+describe('肉で速くなっても(体も大きくなっても)、かならず越えられる', () => {
+  it.each(CHUNKS.map((c) => [c.layout, c] as const))('部品「%s」は、どの肉のレベル(速さと体の大きさ)でも、判定を 6px 厳しくしても越えられる', (_name, chunk) => {
+    // 部品は、肉なしの速さ(base)で並べてある。肉でレベルが上がると、速くなって、時間で見たすきまは、ちぢむ
+    for (const level of [0, 1, 2, 3]) {
+      const mult = boostTarget(level);
+      for (const base of [tierStartSpeed(chunk.tier), 320, MAX_SPEED].filter((v) => v >= tierStartSpeed(chunk.tier))) {
+        const stage: StageDef = { id: 0, name: 'chunk', speed: base * mult, ...parseLayout(base, `1500 ${chunk.layout} 1500`), eggs: [] };
+        expect(findPlan(stage, 6, undefined, undefined, () => level), `レベル ${level}: base ${base}px/s × ${mult}`).not.toBeNull();
+      }
     }
   });
 
@@ -188,7 +190,7 @@ describe('肉で速くなっても、かならず越えられる', () => {
   ] as const)('コース全体を、肉のレベルが「%s」でも、判定を 4px 厳しくしても越えられる', (_name, levelAt) => {
     for (const seed of [1, 2, 3, 4]) {
       const stage = fixedCourse(seed, 20000);
-      expect(findPlan(stage, 4, undefined, factorsFor(levelAt, 6000)), `種 ${seed}`).not.toBeNull();
+      expect(findPlan(stage, 4, undefined, factorsFor(levelAt, 6000), levelAt), `種 ${seed}`).not.toBeNull();
     }
   }, 120_000);
 });
@@ -203,8 +205,8 @@ describe('肉のレベルが、でたらめに上がり下がりしても、か�
       const len = 30 + Math.floor(rand() * 270);
       for (let i = 0; i < len; i++) levels.push(level);
     }
-    const factor = factorsFor((f) => levels[Math.min(f, levels.length - 1)], 6000);
-    expect(findPlan(fixedCourse(seed, 20000), 4, undefined, factor)).not.toBeNull();
+    const levelAt = (f: number): number => levels[Math.min(f, levels.length - 1)];
+    expect(findPlan(fixedCourse(seed, 20000), 4, undefined, factorsFor(levelAt, 6000), levelAt)).not.toBeNull();
   }, 120_000);
 });
 
@@ -251,13 +253,14 @@ describe('肉の置き方', () => {
     }
   });
 
-  it('空中の肉は、最高のジャンプでとどく(体の高さと、取る範囲の広さを入れて、頂点より 20px 以上ひくい)', () => {
+  it('空中の肉は、いちばん小さい体(レベル 0)でも、最高のジャンプでとどく(体の高さと、取る範囲の広さを入れて、頂点より 20px 以上ひくい)', () => {
+    const smallest = Math.min(...BOOST_BODIES.map((b) => b.h));
     for (const seed of [1, 2, 3]) {
-      for (const m of meatsOf(seed, 30000).meats) expect(m.y - MEAT_PICKUP).toBeLessThan(JUMP_PEAK + DINO_H - 20);
+      for (const m of meatsOf(seed, 30000).meats) expect(m.y - MEAT_PICKUP).toBeLessThan(JUMP_PEAK + smallest - 20);
     }
   });
 
-  it('どの肉も、障害物をよけながら取れる(取りながら越えられる経路がある。判定は 4px 厳しく、取る範囲は 2px せまく)', () => {
+  it.each([0, 1, 2, 3])('どの肉も、肉のレベルが %i(体の大きさ)のときに、障害物をよけながら取れる(取りながら越えられる経路がある。判定は 4px 厳しく、取る範囲は 2px せまく)', (level) => {
     for (const seed of [1, 2, 3]) {
       const stage = fixedCourse(seed, 16000);
       const all = meatsOf(seed, 15000).meats;
@@ -265,7 +268,7 @@ describe('肉の置き方', () => {
       for (const m of all) {
         // 肉を「かならず取るたまご」として扱って、取りながら越えられる経路があるか調べる
         const withMeat: StageDef = { ...stage, eggs: [{ x: m.x, y: m.y }] };
-        expect(findPlan(withMeat, 4, 2), `種 ${seed} x=${m.x} y=${m.y}`).not.toBeNull();
+        expect(findPlan(withMeat, 4, 2, undefined, () => level), `種 ${seed} x=${m.x} y=${m.y}`).not.toBeNull();
       }
     }
   }, 300_000);

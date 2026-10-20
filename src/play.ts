@@ -2,7 +2,7 @@
 // 画面のリフレッシュレートが違っても(60Hz / 120Hz)、ゲームの速さは変わらない。
 // 演出(土ぼこり・キラキラ・画面のゆれ・紙ふぶき)は、見た目だけ。動きを減らす設定のときは出さない。
 import {
-  BOOST_FRAMES, bodyOf, newGame, progressPercent, scoreMultiplier, step, trackNearMiss, type GameState, type StageDef,
+  BOOST_FRAMES, bodyOffset, bodyOfState, newGame, progressPercent, scoreMultiplier, step, trackNearMiss, type GameState, type StageDef,
 } from './logic';
 import {
   advanceParticles, advancePopups, confetti, crash, dust, shakeOffset, sparkle, type Particle, type Popup,
@@ -192,8 +192,10 @@ export class Player {
   /** 1 ステップごとの出来事(音と演出) */
   private onStep(prev: GameState, s: GameState): void {
     const theme = themeOf(s);
-    const body = bodyOf(s.stage);
-    const feet = { x: DINO_SCREEN_X + body.w / 2, y: GROUND_Y - 1 };
+    const body = bodyOfState(s);
+    // 体の中心(エンドレスは、大きさが変わっても、中心は動かない)
+    const cx = DINO_SCREEN_X + bodyOffset(s.stage, body) + body.w / 2;
+    const feet = { x: cx, y: GROUND_Y - 1 };
     if (!s.grounded && (prev.grounded || s.vy > prev.vy)) {
       this.handlers.onJump();
       this.spawn(dust(feet.x - 4, feet.y, 4, theme.groundLine, Math.random));
@@ -206,17 +208,19 @@ export class Player {
     if (s.grounded && s.frame % 8 === 0) this.spawn(dust(feet.x - 8, feet.y, 1, theme.groundLine, Math.random));
     // 肉
     if (s.meats.length > prev.meats.length) {
-      this.spawn(sparkle(DINO_SCREEN_X + body.w / 2, GROUND_Y - s.y - body.h / 2, 12, '#e8704a', Math.random, 120));
+      this.spawn(sparkle(cx, GROUND_Y - s.y - body.h / 2, 12, '#e8704a', Math.random, 120));
+      // レベルが上がって、体が大きくなる(姿が変わる)ときは、まわりにキラキラを広げる
+      if (s.boost > prev.boost) this.spawn(sparkle(cx, GROUND_Y - s.y - body.h / 2, 16, '#ffffff', Math.random, 150));
       this.handlers.onMeat(s.boost);
     }
     // たまご
     if (s.eggs.length > prev.eggs.length) {
-      this.spawn(sparkle(DINO_SCREEN_X + body.w / 2, GROUND_Y - s.y - body.h / 2, 10, '#bfe0ff', Math.random, 110));
+      this.spawn(sparkle(cx, GROUND_Y - s.y - body.h / 2, 10, '#bfe0ff', Math.random, 110));
       this.handlers.onEgg(s.eggs.length, s.stage.eggs.length);
     }
     // ぎりぎりで越えた
     if (trackNearMiss(this.minClear, s).length > 0) {
-      this.spawn(sparkle(DINO_SCREEN_X + body.w / 2, GROUND_Y - s.y + 4, 8, '#ffffff', Math.random, 80));
+      this.spawn(sparkle(cx, GROUND_Y - s.y + 4, 8, '#ffffff', Math.random, 80));
       if (!this.reduced) this.popups.push({ text: 'ぎりぎり!', x: DINO_SCREEN_X + 36, y: GROUND_Y - s.y - 34, life: 0.8, max: 0.8, color: '#ffe27a' });
       this.handlers.onNearMiss();
     }
@@ -226,10 +230,11 @@ export class Player {
   private onEnd(): void {
     const s = this.state;
     const theme = themeOf(s);
-    const body = bodyOf(s.stage);
+    const body = bodyOfState(s);
+    const cx = DINO_SCREEN_X + bodyOffset(s.stage, body) + body.w / 2;
     if (s.status === 'dead') {
       this.shakeLeft = SHAKE_FRAMES;
-      this.spawn(crash(DINO_SCREEN_X + body.w / 2, GROUND_Y - s.y - body.h / 2, theme.dino, Math.random));
+      this.spawn(crash(cx, GROUND_Y - s.y - body.h / 2, theme.dino, Math.random));
     } else {
       this.spawn(confetti(70, VIEW_W, Math.random));
     }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { createEndless } from '../src/endless';
 import {
-  DT, BOOST_FRAMES, BOOST_MAX, BOOST_RAMP, BOOST_STEP, BUFFER_FRAMES, DINO_W, MEAT_PICKUP, MEAT_W, MULT_STEP, approachFactor, boostTarget, scoreMultiplier, FPS, JUMP_V, distanceAt, goalFrame, hits, newGame, step, stepBody, touchesEgg, touchesMeat, trackNearMiss, progressPercent, NEAR_MISS_PX, type GameState, type Input, type StageDef,
+  BOOST_BODIES, DINO_BODY, DT, BOOST_FRAMES, BOOST_MAX, BOOST_RAMP, BOOST_STEP, BUFFER_FRAMES, DINO_W, MEAT_PICKUP, MEAT_W, MULT_STEP, approachFactor, boostTarget, scoreMultiplier, FPS, JUMP_V, bodyOffset, bodyOfState, distanceAt, goalFrame, hits, newGame, step, stepBody, touchesEgg, touchesMeat, trackNearMiss, progressPercent, NEAR_MISS_PX, type GameState, type Input, type StageDef,
 } from '../src/logic';
 
 const NONE: Input = { pressed: false, held: false };
@@ -367,5 +368,39 @@ describe('当たり判定', () => {
     expect(hits(s, 100 - DINO_W + 1, 18)).toBe(true); // 左の腕(てっぺんの高さ 20)の中
     expect(hits(s, 100 - DINO_W + 1, 22)).toBe(false); // 腕の上
     expect(hits(s, 100 + 5 - DINO_W / 2, 24)).toBe(true); // 幹の上
+  });
+});
+
+describe('エンドレスの体は、肉のレベルで大きくなる', () => {
+  it('レベルごとの体は、レベル 0〜BOOST_MAX の分あって、高いほど大きく、レベル 2 はダイノと同じ', () => {
+    expect(BOOST_BODIES).toHaveLength(BOOST_MAX + 1);
+    BOOST_BODIES.forEach((b, i) => {
+      if (i === 0) return;
+      expect(b.w).toBeGreaterThan(BOOST_BODIES[i - 1].w);
+      expect(b.h).toBeGreaterThan(BOOST_BODIES[i - 1].h);
+    });
+    expect(BOOST_BODIES[2]).toEqual(DINO_BODY);
+  });
+
+  it('エンドレスは肉のレベルで体が決まる。ふつうのステージは、レベルに関係なく、ステージの体のまま', () => {
+    const endless = createEndless(1);
+    BOOST_BODIES.forEach((b, level) => expect(bodyOfState({ stage: endless, boost: level })).toEqual(b));
+    const chibi: StageDef = { ...flat, body: { w: 14, h: 16 } };
+    expect(bodyOfState({ stage: chibi, boost: 3 })).toEqual({ w: 14, h: 16 });
+    expect(bodyOfState({ stage: flat, boost: 3 })).toEqual(DINO_BODY);
+  });
+
+  it('体が大きくなっても、体の中心は動かない(エンドレスだけ)。ふつうのステージは、左端が動かない', () => {
+    const endless = createEndless(1);
+    for (const b of BOOST_BODIES) expect(bodyOffset(endless, b) + b.w / 2).toBeCloseTo(DINO_W / 2, 10);
+    expect(bodyOffset(flat, { w: 14, h: 16 })).toBe(0);
+  });
+
+  it('大きい体ほど、障害物にぶつかりやすい(同じ位置の岩に、レベル 3 は当たり、レベル 2 は当たらない)', () => {
+    const rock = { kind: 'T' as const, x: 24, w: 28, h: 64 };
+    const stage: StageDef = { ...createEndless(1), obstacles: [rock], meats: [], extend: undefined };
+    const at = (boost: number): GameState => ({ ...newGame(stage), boost, boostLeft: boost > 0 ? BOOST_FRAMES : 0 });
+    expect(step(at(3), NONE).status).toBe('dead');
+    for (const level of [0, 1, 2]) expect(step(at(level), NONE).status, `レベル ${level}`).toBe('running');
   });
 });

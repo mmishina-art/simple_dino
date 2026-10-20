@@ -18,6 +18,17 @@ export interface Body {
 }
 export const DINO_BODY: Body = { w: DINO_W, h: DINO_H };
 
+/**
+ * エンドレスでは、肉のレベル(0〜BOOST_MAX)で、恐竜の姿と体の大きさがいっしょに変わる:
+ * 0 元のちびダイノ → 1 ちびダイノ → 2 ダイノ → 3 進化したダイノ。大きいほど、当たり判定も大きい(よけにくい)。
+ */
+export const BOOST_BODIES: readonly Body[] = [
+  { w: 12, h: 13 },
+  { w: 14, h: 16 },
+  DINO_BODY,
+  { w: 24, h: 28 },
+];
+
 /** ジャンプの初速。上昇中にボタンを押し続けると重力が弱まり、高く跳べる(離すと低く短いジャンプ) */
 export const JUMP_V = 560;
 export const GRAVITY_HOLD = 1400;
@@ -133,6 +144,15 @@ export interface StageDef {
 /** そのステージの、恐竜の当たり判定の大きさ */
 export const bodyOf = (stage: StageDef): Body => stage.body ?? DINO_BODY;
 
+/** そのときの、恐竜の当たり判定の大きさ(エンドレスは、肉のレベルで変わる) */
+export const bodyOfState = (s: Pick<GameState, 'stage' | 'boost'>): Body => (s.stage.endless ? BOOST_BODIES[s.boost] : bodyOf(s.stage));
+
+/**
+ * 体の左端が、走った距離(dist)から、どれだけずれているか。エンドレスは、体の中心をいつも同じ所に置く
+ * (大きくなっても、前にはみ出して、急に障害物にぶつからないように)。ほかのステージは、ずれない。
+ */
+export const bodyOffset = (stage: StageDef, body: Body): number => (stage.endless ? (DINO_W - body.w) / 2 : 0);
+
 /** 恐竜の前に、これだけ先(px)まで、障害物を用意しておく */
 export const EXTEND_AHEAD = 1400;
 
@@ -194,8 +214,9 @@ export const NEAR_MISS_PX = 10;
  * この関数が書き換える(呼ぶ側が持ち続ける)。ぎりぎりで越えた障害物の番号を返す。
  */
 export function trackNearMiss(minClear: Map<number, number>, s: GameState): number[] {
-  const dx = s.dist;
-  const w = bodyOf(s.stage).w;
+  const body = bodyOfState(s);
+  const dx = s.dist + bodyOffset(s.stage, body);
+  const w = body.w;
   const passed: number[] = [];
   s.stage.obstacles.forEach((o, i) => {
     if (o.x > dx + w + 4) return;
@@ -295,12 +316,14 @@ export function step(s: GameState, input: Input): GameState {
   const dx = s.stage.speedAt ? s.dist + s.stage.speedAt(s.dist) * factor * DT : distanceAt(s.stage, frame);
   s.stage.extend?.(dx + EXTEND_AHEAD);
   let status: Status = 'running';
-  const body = bodyOf(s.stage);
-  if (hits(s.stage.obstacles, dx, y, 0, body.w)) status = 'dead';
+  // 当たり判定は、このステップのはじめの、肉のレベルの体で見る(体の左端は、レベルごとにずれる)
+  const body = bodyOfState(s);
+  const left = dx + bodyOffset(s.stage, body);
+  if (hits(s.stage.obstacles, left, y, 0, body.w)) status = 'dead';
   else if (dx >= s.stage.length) status = 'cleared';
   let eggs = s.eggs;
   if (status !== 'dead') {
-    const got = s.stage.eggs.flatMap((egg, i) => (!eggs.includes(i) && touchesEgg(egg, dx, y, 0, body) ? [i] : []));
+    const got = s.stage.eggs.flatMap((egg, i) => (!eggs.includes(i) && touchesEgg(egg, left, y, 0, body) ? [i] : []));
     if (got.length > 0) eggs = [...eggs, ...got];
   }
 
@@ -315,8 +338,8 @@ export function step(s: GameState, input: Input): GameState {
   if (allMeats && status !== 'dead') {
     for (let i = 0; i < allMeats.length; i++) {
       const m = allMeats[i];
-      if (m.x > dx + body.w + MEAT_PICKUP) break;
-      if (m.x + MEAT_W < dx - MEAT_PICKUP || !touchesMeat(m, dx, y, 0, body) || meats.includes(i)) continue;
+      if (m.x > left + body.w + MEAT_PICKUP) break;
+      if (m.x + MEAT_W < left - MEAT_PICKUP || !touchesMeat(m, left, y, 0, body) || meats.includes(i)) continue;
       meats = [...meats, i];
       boost = Math.min(BOOST_MAX, boost + 1);
       boostLeft = BOOST_FRAMES;

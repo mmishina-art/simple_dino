@@ -1,6 +1,6 @@
 // テスト用の「解けるか調べる」仕組み。ジャンプの押し方(いつ押して、何フレーム押し続けるか)を総当たりして、
 // 障害物に当たらずゴールできるかを調べる。ゲームと同じ物理(src/game.ts)を使う。
-import { DT, JUMP_V, bodyOf, distanceAt, goalFrame, hits, stepBody, touchesEgg, type StageDef } from '../src/logic';
+import { BOOST_BODIES, DINO_W, DT, JUMP_V, bodyOf, distanceAt, goalFrame, hits, stepBody, touchesEgg, type Body, type StageDef } from '../src/logic';
 
 const MAX_HOLD = 40;
 
@@ -45,23 +45,33 @@ export interface Move {
 /**
  * margin だけ判定を厳しくしても、ゴールできる押し方。できなければ null。
  * eggShrink を渡すと、たまごを全部取る(取る範囲を eggShrink px せまくしても)押し方だけを探す。
+ * levelAt(エンドレスの、肉のレベルの予定。frame 番目のステップのはじめのレベル)を渡すと、体の大きさがレベルで変わる
+ * (体の中心は動かない)。渡さないときは、ステージの体(stage.body)のまま。
  */
-export function findPlan(stage: StageDef, margin: number, eggShrink?: number, factorAt?: (frame: number) => number): Move[] | null {
+export function findPlan(
+  stage: StageDef,
+  margin: number,
+  eggShrink?: number,
+  factorAt?: (frame: number) => number,
+  levelAt?: (frame: number) => number,
+): Move[] | null {
   const dists = frameDistances(stage, factorAt);
   const total = dists.length - 1;
   const withEggs = eggShrink !== undefined;
   const eggs = withEggs ? stage.eggs : [];
   const shrink = eggShrink ?? 0;
-  const body = bodyOf(stage);
-  const safe = (f: number, y: number): boolean => !hits(stage.obstacles, dists[f], y, margin, body.w);
+  const fixedBody = bodyOf(stage);
+  const bodyAtFrame = (f: number): Body => (levelAt ? BOOST_BODIES[levelAt(f)] : fixedBody);
+  /** frame 番目のフレームの、体の左端(レベルで体が変わるときは、中心をそろえる) */
+  const leftAt = (f: number): number => dists[f] + (levelAt ? (DINO_W - bodyAtFrame(f).w) / 2 : 0);
+  const safe = (f: number, y: number): boolean => !hits(stage.obstacles, leftAt(f), y, margin, bodyAtFrame(f).w);
 
   // フレームごとに、恐竜が横にかさなっているたまごの番号(なければ -1)。たまごどうしは離れているので、同時に 1 つだけ
   const eggAt = new Int16Array(total + 1).fill(-1);
   if (withEggs) {
     for (let f = 0; f <= total; f++) {
-      const dx = dists[f];
       eggs.forEach((e, i) => {
-        if (touchesEgg(e, dx, e.y, shrink, body)) eggAt[f] = i;
+        if (touchesEgg(e, leftAt(f), e.y, shrink, bodyAtFrame(f))) eggAt[f] = i;
       });
     }
   }
@@ -77,7 +87,7 @@ export function findPlan(stage: StageDef, margin: number, eggShrink?: number, fa
         cur = e;
         got = 0;
       }
-      if (e >= 0 && touchesEgg(eggs[e], dists[f + k], ys[k - 1], shrink, body)) got = 1;
+      if (e >= 0 && touchesEgg(eggs[e], leftAt(f + k), ys[k - 1], shrink, bodyAtFrame(f + k))) got = 1;
     }
     return cur >= 0 ? got : 0;
   };
@@ -129,8 +139,8 @@ export function findPlan(stage: StageDef, margin: number, eggShrink?: number, fa
 }
 
 /** margin だけ判定を厳しくしても、ゴールできるか */
-export function canClear(stage: StageDef, margin: number, eggShrink?: number, factorAt?: (frame: number) => number): boolean {
-  return findPlan(stage, margin, eggShrink, factorAt) !== null;
+export function canClear(stage: StageDef, margin: number, eggShrink?: number, factorAt?: (frame: number) => number, levelAt?: (frame: number) => number): boolean {
+  return findPlan(stage, margin, eggShrink, factorAt, levelAt) !== null;
 }
 
 /** 判定を何 px 厳しくしても解けるか(大きいほど、ゆとりがあって易しい)。0 でも解けなければ -1 */
