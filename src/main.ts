@@ -4,6 +4,7 @@ import { CHARACTERS, characterById, forCharacter, isCharacterUnlocked, sanitizeC
 import { createEndless } from './endless';
 import { scoreMultiplier } from './logic';
 import { Player } from './play';
+import { formatPerf } from './perf';
 import {
   allCleared, bestOf, isCleared, isUnlocked, markEndingSeen, recordAttempt, recordClear, recordDeath, recordEndless, sanitizeProgress, starsOf, totalAttempts, totalStars, type Progress,
 } from './progress';
@@ -114,6 +115,9 @@ const starText = (n: number): string => '★'.repeat(n) + '☆'.repeat(3 - n);
 function renderStageList(): void {
   renderCharacters();
   $('debug-note').hidden = !debug;
+  // デバッグモードのときだけ、フレームの時間を記録して、ゲーム画面に出す
+  player.perf = debug;
+  perfHud.hidden = !debug;
   const list = $('stage-list');
   list.replaceChildren();
   for (const stage of STAGES) {
@@ -168,6 +172,15 @@ function show(screen: HTMLElement): void {
 // ---- ゲーム画面 ----
 
 const status = $('game-status');
+const perfHud = $('perf-hud');
+const progressBar = $('progress-bar');
+let barPercent = -1;
+/** 進み具合の棒の幅。毎フレームは書かない(値が変わったときだけ。書くたびに、画面の組み直しが起きるため) */
+function setBar(percent: number): void {
+  if (percent === barPercent) return;
+  barPercent = percent;
+  progressBar.style.setProperty('width', `${percent}%`);
+}
 const score = $('score');
 const boostLabel = $('boost');
 let lastBoost = 0;
@@ -242,9 +255,12 @@ const player = new Player(
       ]);
     },
     onMeat: () => sfx('meat'),
+    onPerf: (summary) => {
+      perfHud.textContent = formatPerf(summary);
+    },
     onProgress: (info) => {
       if (!current.endless) {
-        $('progress-bar').style.setProperty('width', `${Math.round(info.ratio * 100)}%`);
+        setBar(Math.round(info.ratio * 100));
         return;
       }
       // エンドレス: スコアと、肉のレベル・倍率、効き目の残り(棒)を出す。変わったときだけ書きかえる(毎フレームは書かない)
@@ -252,7 +268,7 @@ const player = new Player(
       if (score.textContent !== text) score.textContent = text;
       const label = info.boost > 0 ? `🍖${info.boost} ×${info.mult.toFixed(1)}` : '';
       if (boostLabel.textContent !== label) boostLabel.textContent = label;
-      $('progress-bar').style.setProperty('width', `${Math.round(info.boostRatio * 100)}%`);
+      setBar(Math.round(info.boostRatio * 100));
       game.classList.toggle('boosted', info.boost > 0);
       if (info.boost !== lastBoost) {
         lastBoost = info.boost;
