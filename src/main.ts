@@ -11,7 +11,7 @@ import {
 import { STAGES } from './stages';
 import { setupInstallGuide } from './install';
 import { checkForUpdate, setupUpdateBanner, type UpdateResult } from './pwa';
-import { isMusicOn, setMusicOn, setMusicTempo, setScene, syncMusic, unlockMusic } from './music';
+import { isMusicOn, prepareMusic, setMusicOn, setMusicTempo, setScene, syncMusic, unlockMusic } from './music';
 import { isSoundOn, setSound, sfx, syncSound } from './sound';
 import { stageSongId, type SongId } from './songs';
 import { exportBackup, importBackup, load, migrateStorage, requestPersist, save } from './storage';
@@ -354,7 +354,9 @@ function openStage(base: StageDef): void {
   hint.hidden = false;
   status.textContent = '';
   player.load(stage);
-  setScene(songIdOf(stage), { restart: true });
+  // 曲は走り出すときに鳴らす。それまでに音符を用意しておく
+  setScene(null);
+  prepareMusic(songIdOf(stage));
 }
 
 /** 曲の番号。エンドレスは専用の曲 */
@@ -375,7 +377,8 @@ function openEndless(): void {
   hint.hidden = false;
   status.textContent = '';
   player.load(current);
-  setScene('endless', { restart: true });
+  setScene(null);
+  prepareMusic('endless');
 }
 
 /** 進み具合の棒に、これまででいちばん進んだ場所の印をつけ、ベストを文字でも出す */
@@ -447,8 +450,7 @@ function pressInput(): void {
   if (player.phase === 'ready') {
     hint.hidden = true;
     if (!current.endless) updateProgress(recordAttempt(progress, current.id));
-    // 曲はステージを開いたときから鳴っている。ここで作り直すと、開始の瞬間に引っかかる
-    setScene(songIdOf(current));
+    setScene(songIdOf(current), { restart: true });
     sfx('start');
     player.begin();
   } else if (player.phase === 'playing') {
