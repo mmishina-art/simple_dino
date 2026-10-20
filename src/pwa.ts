@@ -19,12 +19,12 @@ export type UpdateResult =
 let registration: ServiceWorkerRegistration | undefined;
 let lastCheck: number | null = null;
 
-/** 新版があるか確認する。force が true なら、間隔をおかずに確認する(ボタンから) */
-export async function checkForUpdate(force = false): Promise<UpdateResult> {
+/** 新版があるか確認する(前の確認から間隔があいていないときは見送る) */
+export async function checkForUpdate(): Promise<UpdateResult> {
   const reg = registration;
   if (!reg) return 'unavailable';
   const now = Date.now();
-  if (!force && !shouldCheck(now, lastCheck)) return 'skipped';
+  if (!shouldCheck(now, lastCheck)) return 'skipped';
   lastCheck = now;
   try {
     await reg.update();

@@ -182,7 +182,8 @@ test('進み具合は、バックアップの書き出し・読み込みで戻�
   }, APP_ID);
   await page.goto('/');
   await expect(page.locator('#title-summary')).toHaveText('つづき: クリア 2/10');
-  await page.getByText('記録のバックアップ').click();
+  await toSelect(page);
+  await page.locator('#backup-open').click();
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'ファイルに書き出す' }).click()]);
   const { readFileSync } = await import('node:fs');
   const text = readFileSync(await download.path(), 'utf8');
@@ -190,10 +191,11 @@ test('進み具合は、バックアップの書き出し・読み込みで戻�
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await expect(page.locator('#title-summary')).toHaveText('');
-  await page.getByText('記録のバックアップ').click();
+  await toSelect(page);
+  await page.locator('#backup-open').click();
   await page.locator('#backup-import').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(text) });
   await expect(page.locator('#title-summary')).toHaveText('つづき: クリア 2/10');
-  await toSelect(page);
+  await page.locator('#backup-dialog [data-close]').click();
   await expect(page.getByRole('button', { name: 'ステージ3 ゆうやけ' })).toBeEnabled();
 });
 
@@ -501,7 +503,8 @@ test('最初の画面にバージョンが表示される', async ({ page }) => 
 test('記録をファイルに書き出し、消えたあとに読み込んで戻せる', async ({ page }) => {
   await page.goto('/');
   await page.locator('#sound-button').click();
-  await page.getByText('記録のバックアップ').click();
+  await toSelect(page);
+  await page.locator('#backup-open').click();
 
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'ファイルに書き出す' }).click()]);
   const path = await download.path();
@@ -513,7 +516,8 @@ test('記録をファイルに書き出し、消えたあとに読み込んで�
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await expect(page.locator('#sound-button')).toHaveAttribute('aria-pressed', 'true');
-  await page.getByText('記録のバックアップ').click();
+  await toSelect(page);
+  await page.locator('#backup-open').click();
   await page.locator('#backup-import').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(text) });
   await expect(page.locator('#sound-button')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('#backup-message')).toContainText('読み込みました');
@@ -521,7 +525,8 @@ test('記録をファイルに書き出し、消えたあとに読み込んで�
 
 test('おかしいバックアップファイルは、理由を表示して読み込まない', async ({ page }) => {
   await page.goto('/');
-  await page.getByText('記録のバックアップ').click();
+  await toSelect(page);
+  await page.locator('#backup-open').click();
   await page.locator('#backup-import').setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{"app":"other"}') });
   await expect(page.locator('#backup-message')).toContainText('このアプリのバックアップではありません');
   await expect(page.locator('#sound-button')).toHaveAttribute('aria-pressed', 'true');
@@ -620,12 +625,13 @@ test('デバッグモード(隠しコマンド): バージョンを 7 回タッ�
   await page.reload();
   await toSelect(page);
   await expect(page.locator('#debug-note')).toBeVisible();
-  await page.getByRole('button', { name: 'タイトルにもどる' }).click();
-  await page.getByText('記録のバックアップ').click();
+  await page.locator('#backup-open').click();
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'ファイルに書き出す' }).click()]);
   const { readFileSync } = await import('node:fs');
   const exported = JSON.parse(readFileSync(await download.path(), 'utf8')) as { data: Record<string, string> };
   expect(Object.keys(exported.data)).not.toContain(`${APP_ID}-debug`);
+  await page.locator('#backup-dialog [data-close]').click();
+  await page.getByRole('button', { name: 'タイトルにもどる' }).click();
 
   // もう 7 回でオフ: 鍵つきにもどり、キャラもダイノにもどる
   await tapVersion(7);
@@ -639,7 +645,7 @@ test('デバッグモード(隠しコマンド): バージョンを 7 回タッ�
   await expect(page.locator('#perf-hud')).toBeHidden();
 });
 
-test('新版の確認: アプリに戻ったとき・「新しい版を確認する」で、Service Worker に確認させる(間隔をおく)', async ({ page }) => {
+test('新版の確認: アプリに戻ったとき、Service Worker に確認させる(間隔をおく)', async ({ page }) => {
   await page.addInitScript(() => {
     const w = window as unknown as { __updates: number };
     w.__updates = 0;
@@ -660,10 +666,6 @@ test('新版の確認: アプリに戻ったとき・「新しい版を確認す
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   expect(await count()).toBe(1);
 
-  // ボタンは、間隔をおかずに確認して、結果を知らせる
-  await page.getByRole('button', { name: '新しい版を確認する' }).click();
-  await expect(page.locator('#update-message')).toHaveText('これが最新の版です');
-  expect(await count()).toBe(2);
   // 新版はないので、「更新」の案内は出ない
   await expect(page.locator('#update-banner')).toBeHidden();
 });
@@ -786,4 +788,19 @@ test('エンドレス: ダイノで全ステージをクリアするまでは見
   await page.reload();
   await toSelect(page);
   await expect(page.locator('#endless-open')).toBeVisible();
+});
+
+test('タイトル画面: ロゴの画像が、動く絵の上に表示される(読み上げ用の見出しも残る)', async ({ page }) => {
+  await page.goto('/');
+  const logo = page.locator('.title-logo-img');
+  await expect(logo).toBeVisible();
+  // 画像が読み込めている
+  await expect.poll(() => logo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+  // 絵の中(上のほう)にある
+  const art = (await page.locator('.title-art').boundingBox())!;
+  const box = (await logo.boundingBox())!;
+  expect(box.y).toBeGreaterThanOrEqual(art.y);
+  expect(box.y + box.height).toBeLessThan(art.y + art.height * 0.6);
+  // 見出し(読み上げ用)
+  await expect(page.getByRole('heading', { level: 1, name: 'ダイノラン' })).toBeAttached();
 });

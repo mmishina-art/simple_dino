@@ -62,13 +62,20 @@ function scroll(base: number, d: number, factor: number, margin = 80): number {
   return ((((base - d * factor) % period) + period) % period) - margin;
 }
 
-function drawDecor(p: Pen, theme: Theme, d: number): void {
+/** タイトルでは、ロゴ(絵の上のほう)にかくれないように、太陽はロゴの右上、雲はロゴの前後にばらして置く(雲はロゴにかぶってよい) */
+const TITLE_SUN: readonly [number, number] = [336, 12];
+const TITLE_CLOUDS: readonly (readonly [number, number])[] = [[24, 40], [200, 10], [110, 118], [300, 100]];
+
+function drawDecor(p: Pen, theme: Theme, d: number, title = false): void {
   const { decor: a, decor2: b } = theme;
   for (const kind of theme.decors) {
     switch (kind) {
       case 'sun':
-        rect(p, 316, 24 + SKY_SHIFT, 28, 28, a);
-        rect(p, 312, 28 + SKY_SHIFT, 36, 20, a);
+        {
+          const [sx, sy] = title ? TITLE_SUN : [316, 24 + SKY_SHIFT];
+          rect(p, sx, sy, 28, 28, a);
+          rect(p, sx - 4, sy + 4, 36, 20, a);
+        }
         break;
       case 'bigSun':
         rect(p, 150, GROUND_Y - 82, 100, 82, b);
@@ -82,7 +89,7 @@ function drawDecor(p: Pen, theme: Theme, d: number): void {
         rect(p, 324, 46 + SKY_SHIFT, 14, 4, a);
         break;
       case 'cloud':
-        for (const [bx, by] of [[40, 30 + SKY_SHIFT], [220, 50 + SKY_SHIFT], [330, 22 + SKY_SHIFT]]) {
+        for (const [bx, by] of title ? TITLE_CLOUDS : [[40, 30 + SKY_SHIFT], [220, 50 + SKY_SHIFT], [330, 22 + SKY_SHIFT]]) {
           const x = scroll(bx, d, 0.08);
           rect(p, x + 6, by, 24, 8, b);
           rect(p, x, by + 6, 40, 8, b);
@@ -371,7 +378,7 @@ export function drawTitle(c: CanvasRenderingContext2D, width: number, t: number)
 
   const bandH = GROUND_Y / SKY_BANDS;
   for (let i = 0; i < SKY_BANDS; i++) rect(p, 0, i * bandH, VIEW_W, bandH + 1, mix(theme.skyTop, theme.skyBottom, i / (SKY_BANDS - 1)));
-  drawDecor(p, theme, d);
+  drawDecor(p, theme, d, true);
   drawGround(p, theme, d);
 
   // 障害物が右から流れてきて、恐竜が手前で跳ぶ(跳ぶ高さは、障害物との距離で決まる)

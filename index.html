@@ -22,30 +22,23 @@
     <main id="app">
       <!-- タイトル画面(最初の画面) -->
       <section id="screen-title" class="title-screen">
+        <div class="top-row">
+          <button id="sound-button" type="button" class="icon-button top-sound" aria-label="音(効果音とBGM)" aria-pressed="true">🔊</button>
+        </div>
         <div class="title-art">
           <canvas id="title-canvas" class="game-canvas" role="img" aria-label="恐竜が、サボテンや岩をジャンプで跳び越えながら走っています"></canvas>
-          <div class="title-toggles">
-            <button id="sound-button" type="button" class="icon-button" aria-label="音(効果音とBGM)" aria-pressed="true">🔊</button>
-          </div>
+          <!-- ロゴは、動く絵の上のほうに重ねる(文字としては、下の h1 が読み上げられる) -->
+          <img class="title-logo-img" src="logo.png" alt="" width="952" height="317" />
         </div>
-        <h1 class="title-logo">ダイノラン</h1>
+        <h1 class="sr-only">ダイノラン</h1>
         <p class="muted title-lead ja">タップでジャンプ。<wbr>サボテンや岩をよけて、<wbr>旗(ゴール)まで<wbr>たどりつこう。</p>
         <button id="play-button" type="button" class="primary play-button">あそぶ</button>
         <p id="title-summary" class="muted" aria-live="polite"></p>
 
-        <details class="backup">
-          <summary>記録のバックアップ</summary>
-          <p class="muted ja">記録は、このブラウザの中にだけ<wbr>保存されています。<wbr>ファイルに残しておくと、<wbr>消えたときに戻せます。</p>
-          <button id="backup-export" type="button">ファイルに書き出す</button>
-          <label class="file-button">ファイルから読み込む<input id="backup-import" type="file" accept="application/json,.json" hidden></label>
-          <p id="backup-message" class="muted" role="status"></p>
-        </details>
 
         <button id="install-open" type="button" class="link ja">📲 アプリとして<wbr>インストールする方法</button>
 
         <p class="muted version">v<span id="version"></span></p>
-        <button id="update-check" type="button" class="link">新しい版を確認する</button>
-        <p id="update-message" class="muted" role="status"></p>
       </section>
 
       <!-- ステージ選択 -->
@@ -53,13 +46,15 @@
         <header class="header">
           <button id="select-back" type="button" aria-label="タイトルにもどる">もどる</button>
           <h2 class="select-title">ステージをえらぶ</h2>
+          <button id="sound-button-select" type="button" class="icon-button top-sound" aria-label="音(効果音とBGM)" aria-pressed="true">🔊</button>
         </header>
         <p id="debug-note" class="muted ja" hidden>デバッグモード: ちびダイノと、<wbr>全ステージを選べます</p>
         <div id="character-picker" class="character-picker" role="group" aria-label="キャラ"></div>
         <p id="progress-summary" class="progress-summary" aria-live="polite"></p>
         <ol id="stage-list" class="stage-list" aria-label="ステージ"></ol>
         <button id="endless-open" type="button" class="endless-button">♾ エンドレス <span id="endless-best" class="muted"></span></button>
-        <button id="ending-open" type="button" class="ja" hidden>🎉 エンディングを<wbr>もういちど見る</button>
+        <button id="ending-open" type="button" class="ja wide" hidden>🎉 エンディングを<wbr>もういちど見る</button>
+        <button id="backup-open" type="button" class="wide">💾 記録のバックアップ</button>
       </section>
 
       <!-- エンディング(全ステージクリア) -->
@@ -80,7 +75,7 @@
             <span id="game-best" class="hud-best muted"></span>
           </div>
           <span class="egg-counter"><svg class="egg-icon" viewBox="0 0 7 8" aria-hidden="true" focusable="false" shape-rendering="crispEdges"><rect class="egg-edge" x="2" y="0" width="1" height="1"/><rect class="egg-edge" x="3" y="0" width="1" height="1"/><rect class="egg-edge" x="4" y="0" width="1" height="1"/><rect class="egg-edge" x="1" y="1" width="1" height="1"/><rect class="egg-body" x="2" y="1" width="1" height="1"/><rect class="egg-body" x="3" y="1" width="1" height="1"/><rect class="egg-body" x="4" y="1" width="1" height="1"/><rect class="egg-edge" x="5" y="1" width="1" height="1"/><rect class="egg-edge" x="0" y="2" width="1" height="1"/><rect class="egg-body" x="1" y="2" width="1" height="1"/><rect class="egg-shine" x="2" y="2" width="1" height="1"/><rect class="egg-body" x="3" y="2" width="1" height="1"/><rect class="egg-body" x="4" y="2" width="1" height="1"/><rect class="egg-body" x="5" y="2" width="1" height="1"/><rect class="egg-edge" x="6" y="2" width="1" height="1"/><rect class="egg-edge" x="0" y="3" width="1" height="1"/><rect class="egg-body" x="1" y="3" width="1" height="1"/><rect class="egg-shine" x="2" y="3" width="1" height="1"/><rect class="egg-body" x="3" y="3" width="1" height="1"/><rect class="egg-body" x="4" y="3" width="1" height="1"/><rect class="egg-body" x="5" y="3" width="1" height="1"/><rect class="egg-edge" x="6" y="3" width="1" height="1"/><rect class="egg-edge" x="0" y="4" width="1" height="1"/><rect class="egg-body" x="1" y="4" width="1" height="1"/><rect class="egg-body" x="2" y="4" width="1" height="1"/><rect class="egg-body" x="3" y="4" width="1" height="1"/><rect class="egg-body" x="4" y="4" width="1" height="1"/><rect class="egg-body" x="5" y="4" width="1" height="1"/><rect class="egg-edge" x="6" y="4" width="1" height="1"/><rect class="egg-edge" x="0" y="5" width="1" height="1"/><rect class="egg-body" x="1" y="5" width="1" height="1"/><rect class="egg-body" x="2" y="5" width="1" height="1"/><rect class="egg-body" x="3" y="5" width="1" height="1"/><rect class="egg-body" x="4" y="5" width="1" height="1"/><rect class="egg-body" x="5" y="5" width="1" height="1"/><rect class="egg-edge" x="6" y="5" width="1" height="1"/><rect class="egg-edge" x="1" y="6" width="1" height="1"/><rect class="egg-body" x="2" y="6" width="1" height="1"/><rect class="egg-body" x="3" y="6" width="1" height="1"/><rect class="egg-body" x="4" y="6" width="1" height="1"/><rect class="egg-edge" x="5" y="6" width="1" height="1"/><rect class="egg-edge" x="2" y="7" width="1" height="1"/><rect class="egg-edge" x="3" y="7" width="1" height="1"/><rect class="egg-edge" x="4" y="7" width="1" height="1"/></svg><span class="sr-only">たまご</span> <span id="egg-count">0/0</span></span>
-          <button id="sound-button-game" type="button" class="icon-button hud-sound" aria-label="音(効果音とBGM)" aria-pressed="true">🔊</button>
+          <button id="sound-button-game" type="button" class="icon-button top-sound" aria-label="音(効果音とBGM)" aria-pressed="true">🔊</button>
         </div>
         <!-- エンドレス: スコアと、肉のレベル・倍率(ふつうのステージでは出ない) -->
         <div class="score-row" aria-hidden="true">
@@ -104,8 +99,18 @@
       </section>
     </main>
 
+    <!-- 記録のバックアップ(最初の画面から開く) -->
+    <dialog id="backup-dialog" class="popup" aria-labelledby="backup-title">
+      <h2 id="backup-title">記録のバックアップ</h2>
+      <p class="muted ja">記録は、このブラウザの中にだけ<wbr>保存されています。<wbr>ファイルに残しておくと、<wbr>消えたときに戻せます。</p>
+      <button id="backup-export" type="button">ファイルに書き出す</button>
+      <label class="file-button">ファイルから読み込む<input id="backup-import" type="file" accept="application/json,.json" hidden></label>
+      <p id="backup-message" class="muted" role="status"></p>
+      <button type="button" data-close>とじる</button>
+    </dialog>
+
     <!-- インストール方法（最初の画面から開く） -->
-    <dialog id="install-dialog" class="install-dialog" aria-labelledby="install-title">
+    <dialog id="install-dialog" class="popup" aria-labelledby="install-title">
       <h2 id="install-title">ホーム画面に追加して使う</h2>
       <p class="muted">インストールすると、<wbr>ホーム画面から開けて、<wbr>オフラインでも使えます。</p>
       <button id="install-now" type="button" class="primary" hidden>今すぐインストール</button>
