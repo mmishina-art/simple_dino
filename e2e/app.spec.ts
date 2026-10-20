@@ -606,3 +606,32 @@ test('デバッグモード(隠しコマンド): バージョンを 7 回タッ�
   await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
   await expect(page.locator('#perf-hud')).toBeHidden();
 });
+
+test('新版の確認: アプリに戻ったとき・「新しい版を確認する」で、Service Worker に確認させる(間隔をおく)', async ({ page }) => {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __updates: number };
+    w.__updates = 0;
+    const update = ServiceWorkerRegistration.prototype.update;
+    ServiceWorkerRegistration.prototype.update = function (this: ServiceWorkerRegistration) {
+      w.__updates += 1;
+      return update.call(this);
+    };
+  });
+  await page.goto('/');
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  const count = (): Promise<number> => page.evaluate(() => (window as unknown as { __updates: number }).__updates);
+  // 登録がすんだあと、アプリに戻ってきたら、確認する。すぐにまた戻っても、見送る(通信しすぎない)
+  await expect.poll(async () => {
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    return count();
+  }).toBe(1);
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  expect(await count()).toBe(1);
+
+  // ボタンは、間隔をおかずに確認して、結果を知らせる
+  await page.getByRole('button', { name: '新しい版を確認する' }).click();
+  await expect(page.locator('#update-message')).toHaveText('これが最新の版です');
+  expect(await count()).toBe(2);
+  // 新版はないので、「更新」の案内は出ない
+  await expect(page.locator('#update-banner')).toBeHidden();
+});
