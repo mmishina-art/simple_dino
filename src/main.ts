@@ -33,15 +33,22 @@ const hint = $('game-hint');
 const overlay = $('game-overlay');
 const pad = $('game-pad');
 
+/**
+ * 音(効果音と BGM)は、1 つのボタンでまとめてオン/オフする。どちらかが切れていたら、オフとみなす。
+ * 保存のキーは、これまでどおり sound と music の 2 つのまま(キー名は変えない)。
+ */
+const isAudioOn = (): boolean => isSoundOn() && isMusicOn();
+function setAudio(on: boolean): void {
+  setSound(on);
+  setMusicOn(on);
+}
+
 function renderToggles(): void {
-  const sound = $('sound-button');
-  sound.textContent = isSoundOn() ? '🔊' : '🔇';
-  sound.setAttribute('aria-pressed', String(isSoundOn()));
-  // BGM のボタン(タイトルとゲーム中の 2 か所)
-  for (const id of ['music-button', 'music-button-game']) {
+  // 音のボタン(タイトルとゲーム中の 2 か所)
+  for (const id of ['sound-button', 'sound-button-game']) {
     const el = $(id);
-    el.textContent = isMusicOn() ? '🎵' : '🔕';
-    el.setAttribute('aria-pressed', String(isMusicOn()));
+    el.textContent = isAudioOn() ? '🔊' : '🔇';
+    el.setAttribute('aria-pressed', String(isAudioOn()));
   }
 }
 
@@ -459,13 +466,9 @@ $('game-back').addEventListener('click', closeStage);
 
 // ---- ホーム画面の設定・バックアップ・インストール案内 ----
 
-$('sound-button').addEventListener('click', () => {
-  setSound(!isSoundOn());
-  renderToggles();
-});
-for (const id of ['music-button', 'music-button-game']) {
+for (const id of ['sound-button', 'sound-button-game']) {
   $(id).addEventListener('click', () => {
-    setMusicOn(!isMusicOn());
+    setAudio(!isAudioOn());
     renderToggles();
   });
 }
@@ -497,6 +500,7 @@ $<HTMLInputElement>('backup-import').addEventListener('change', async (e) => {
     const n = importBackup(await file.text());
     syncSound();
     syncMusic();
+    setAudio(isAudioOn());
     const saved = sanitizeCharacterId(load<unknown>('character', 'dino'));
     character = isUnlockedChar(saved) ? saved : 'dino';
     progress = loadProgress();
@@ -546,6 +550,8 @@ $('version').parentElement?.addEventListener('pointerup', () => {
 requestPersist();
 setupUpdateBanner($('update-banner'), $('update-button'));
 setupInstallGuide($<HTMLButtonElement>('install-open'), $<HTMLDialogElement>('install-dialog'), $<HTMLButtonElement>('install-now'));
+// 昔の記録で、効果音と BGM の片方だけが切れていたら、両方切れた状態にそろえる
+setAudio(isAudioOn());
 renderToggles();
 renderStageList();
 show(title);

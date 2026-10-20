@@ -41,7 +41,7 @@ Vite + TypeScript + vite-plugin-pwa + Vitest + Playwright + ESLint。UI フレ�
 ## 構成
 
 - `src/logic.ts`: ルール・計算(ゲームの物理、当たり判定)。DOM に触れない純関数にして `tests/` で単体テストする。`src/stages.ts`: ステージのデータ。`src/endless.ts`: エンドレスモードのコース作り(部品と肉をつなぐ)。`src/characters.ts`: キャラ(速さの倍率・当たり判定の大きさ。ちびダイノは全クリアで解放。記録は `progress` / `progress-chibi` で別)。`tests/solver.ts`: ステージ・エンドレスのコースが解けることを総当たりで確かめる(テスト用)。
-- `src/songs.ts`(BGM の曲のデータ。テストで小節の長さ・音の高さを検査)、`src/music.ts`(BGM の演奏)。BGM は効果音とは別にオン/オフできる。
+- `src/songs.ts`(BGM の曲のデータ。テストで小節の長さ・音の高さを検査)、`src/music.ts`(BGM の演奏)。効果音と BGM は、1 つのボタンでまとめてオン/オフする(保存のキーは `sound` と `music` の 2 つのまま)。
 - `src/render.ts`(Canvas 描画)、`src/fx.ts`(演出の粒。見た目だけ)、`src/sprites.ts`(ドット絵)、`src/themes.ts`(ステージの背景)、`src/play.ts`(プレイ中の進行と入力)。
 - `src/main.ts`: DOM の操作だけ。`src/sound.ts`(効果音)、`src/storage.ts`(保存)、`src/pwa.ts`(更新ボタン)、`src/install.ts`(インストール方法の説明)。
 - `vite.config.ts`: アプリ名・色・manifest。`index.html` の `theme-color`・タイトルと合わせて書き換える。
