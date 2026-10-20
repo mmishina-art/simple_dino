@@ -79,7 +79,7 @@ export class Player {
   /** デバッグモードの切り分け用: 描く画面の密度の上限(null なら端末のまま)と、描くのをやめる指定 */
   private densityCap: number | null = null;
   private drawOff = false;
-  private readonly stats = new FrameStats(120);
+  private readonly stats = new FrameStats(180);
   private statsSince = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly handlers: PlayHandlers, stage: StageDef) {
@@ -157,6 +157,9 @@ export class Player {
   setRenderMode(densityCap: number | null, off = false): void {
     this.densityCap = densityCap;
     this.drawOff = off;
+    // 描き方を変えたら、数え直す(前の描き方のフレームを、混ぜない)
+    this.stats.reset();
+    this.statsSince = 0;
     this.resize();
   }
 
@@ -182,7 +185,8 @@ export class Player {
       else if (this.phase === 'dead' || this.phase === 'cleared') this.settle();
       this.animate(dt);
       this.draw();
-      if (this.perf) this.recordPerf(rawGap, performance.now() - began);
+      // 数えるのは、走っているあいだだけ(やられた瞬間の、結果の画面を出す処理などを、混ぜない)
+      if (this.perf && this.phase === 'playing') this.recordPerf(rawGap, performance.now() - began);
       const resting = (this.phase === 'dead' || this.phase === 'cleared') && this.endedFrames > RESULT_DELAY && this.particles.length === 0;
       if (this.phase === 'playing' || ((this.phase === 'dead' || this.phase === 'cleared') && !resting)) this.loop();
     });
