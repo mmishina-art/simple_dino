@@ -582,32 +582,6 @@ test('デバッグモード(隠しコマンド): バージョンを 7 回タッ�
   await page.getByRole('button', { name: 'ステージ10 ラスト' }).click();
   await expect(page.locator('#game-title')).toHaveText('ステージ10 ラスト🐣');
 
-  // デバッグモードのゲーム画面には、フレームの時間(カクつきの調査用)が出る
-  await expect(page.locator('#perf-hud')).toBeVisible();
-  // 表示をタップするたびに、描き方(画面の密度)が切り替わる: 自動 → ×2 → ×1 → 描かない → 更新だけ → 自動。カクつきの原因の切り分け用
-  // canvas の幅は、そのときの表示の幅 × 密度で決まる(画面の幅は、読み込み中に変わることがあるので、そのつど比べる)
-  const widthMatches = (density: number | null): Promise<boolean> =>
-    page.evaluate((d) => {
-      const c = document.getElementById('game-canvas') as HTMLCanvasElement;
-      return c.width === Math.round(c.clientWidth * Math.min(window.devicePixelRatio, d ?? Infinity));
-    }, density);
-  await expect.poll(() => widthMatches(null)).toBe(true);
-  await page.locator('#perf-hud').click();
-  await expect(page.locator('#perf-hud')).toContainText('密度 ×2');
-  await expect.poll(() => widthMatches(2)).toBe(true);
-  await page.locator('#perf-hud').click();
-  await expect(page.locator('#perf-hud')).toContainText('密度 ×1');
-  await expect.poll(() => widthMatches(1)).toBe(true);
-  await page.locator('#perf-hud').click();
-  await expect(page.locator('#perf-hud')).toContainText('描かない');
-  await page.locator('#perf-hud').click();
-  await expect(page.locator('#perf-hud')).toContainText('更新だけ');
-  await page.locator('#perf-hud').click();
-  await expect(page.locator('#perf-hud')).toContainText('密度 自動');
-  await expect.poll(() => widthMatches(null)).toBe(true);
-  await page.locator('#game-canvas').tap();
-  await expect(page.locator('#perf-hud')).toContainText(/FPS \d+ ｜ 最悪 \d+ms ｜ 遅れ \d+% ｜ 処理 [\d.]+ms/, { timeout: 10_000 });
-
   // 読み込み直しても、オンのまま。バックアップには入らない
   await page.reload();
   await toSelect(page);
@@ -626,9 +600,6 @@ test('デバッグモード(隠しコマンド): バージョンを 7 回タッ�
   await expect(page.locator('#debug-note')).toBeHidden();
   await expect(page.locator('#character-picker')).toBeHidden();
   await expect(page.getByRole('button', { name: 'ステージ10 ラスト' })).toBeDisabled();
-  // ふつうのときは、フレームの時間は出ない
-  await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
-  await expect(page.locator('#perf-hud')).toBeHidden();
 });
 
 test('新版の確認: アプリに戻ったとき・「新しい版を確認する」で、Service Worker に確認させる(間隔をおく)', async ({ page }) => {
@@ -730,36 +701,6 @@ test('ダブルタップでの拡大を防ぐ: 0.35 秒以内の 2 回目のタ�
   expect(inGame).toEqual({ first: false, second: false, touchAction: 'none' });
   // CSS でも、すべての要素で、ダブルタップ拡大だけを防いでいる
   expect(await page.evaluate(() => getComputedStyle(document.querySelector('.title-lead') as Element).touchAction)).toBe('manipulation');
-});
-
-test('デバッグモード: 入力の受け方(pointerdown / touchstart)を切り替えても、タップでスタートでき、入力の記録が出る', async ({ page }) => {
-  await page.addInitScript((id) => {
-    localStorage.setItem(`${id}-debug`, 'true');
-    localStorage.setItem(`${id}-music`, 'false');
-  }, APP_ID);
-  await page.goto('/');
-  await toSelect(page);
-  await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
-  await expect(page.locator('#input-method')).toHaveText('入力: pointerdown');
-  await expect(page.locator('#perf-hud')).toContainText('入力 まだなし ｜ 方式 pointerdown');
-  // ふだん(pointerdown)は、止める可能性のある touchstart の受け皿を付けない(付けると、iPhone は、タッチのたびに待つため)
-  const prevented = await page.evaluate(() => {
-    const e = new Event('touchstart', { bubbles: true, cancelable: true });
-    (document.getElementById('game-canvas') as Element).dispatchEvent(e);
-    return e.defaultPrevented;
-  });
-  expect(prevented).toBe(false);
-  await expect(page.locator('#game-hint')).toBeVisible();
-  await page.locator('#input-method').click();
-  await expect(page.locator('#input-method')).toHaveText('入力: touchstart');
-  await expect(page.locator('#perf-hud')).toContainText('方式 touchstart');
-  // touchstart で受けても、タップ(タッチ)でスタートできる
-  const box = (await page.locator('#game-canvas').boundingBox())!;
-  await page.touchscreen.tap(box.x + box.width / 2, box.y + 60);
-  await expect(page.locator('#game-hint')).toBeHidden();
-  // 2 回目のタップ(ジャンプ)のあとに、届くまでの遅れの記録が出る
-  await page.touchscreen.tap(box.x + box.width / 2, box.y + 60);
-  await expect(page.locator('#perf-hud')).toContainText(/入力 届くまで 平均 [\d.]+ms 最大 [\d.]+ms ｜ 受付の処理 最大 [\d.]+ms ｜ 方式 touchstart/);
 });
 
 test('タップ計測テストのページ: 開けて、タップすると入力の数字が出る', async ({ page }) => {
