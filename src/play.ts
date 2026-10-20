@@ -2,13 +2,15 @@
 // 画面のリフレッシュレートが違っても(60Hz / 120Hz)、ゲームの速さは変わらない。
 // 演出(土ぼこり・キラキラ・画面のゆれ・紙ふぶき)は、見た目だけ。動きを減らす設定のときは出さない。
 import {
-  BOOST_FRAMES, DT, bodyOf, newGame, progressPercent, scoreMultiplier, step, trackNearMiss, type GameState, type StageDef,
+  BOOST_FRAMES, bodyOf, newGame, progressPercent, scoreMultiplier, step, trackNearMiss, type GameState, type StageDef,
 } from './logic';
 import {
   advanceParticles, advancePopups, confetti, crash, dust, shakeOffset, sparkle, type Particle, type Popup,
 } from './fx';
 import { DINO_SCREEN_X, GROUND_Y, VIEW_H, VIEW_W, drawScene } from './render';
 import { meters } from './endless';
+import { alphaOf, lerp, tick } from './clock';
+import { FrameStats, type PerfSummary } from './perf';
 import { themeOf } from './themes';
 
 export type Phase = 'ready' | 'playing' | 'paused' | 'dead' | 'cleared';
@@ -42,6 +44,8 @@ export interface PlayHandlers {
   /** 肉を取った。level は取ったあとのレベル */
   onMeat(level: number): void;
   onProgress(info: RunInfo): void;
+  /** デバッグモード: フレームの時間のまとめ(30 フレームごと) */
+  onPerf?(summary: PerfSummary): void;
 }
 
 /** やられた・ゴールしたあと、結果を出すまでの間(フレーム数) */
@@ -54,6 +58,8 @@ const SHAKE_PX = 5;
 
 export class Player {
   private state: GameState;
+  /** ひとつ前のステップの状態(描くとき、いまの状態とのあいだを補う) */
+  private prev: GameState;
   phase: Phase = 'ready';
   private held = false;
   private pendingPress = false;
@@ -68,12 +74,17 @@ export class Player {
   private popups: Popup[] = [];
   private shakeLeft = 0;
   private readonly minClear = new Map<number, number>();
+  /** デバッグモードで、フレームの時間を記録する */
+  perf = false;
+  private readonly stats = new FrameStats(120);
+  private statsSince = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly handlers: PlayHandlers, stage: StageDef) {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('canvas が使えません');
     this.ctx = ctx;
     this.state = newGame(stage);
+    this.prev = this.state;
     new ResizeObserver(() => this.resize()).observe(canvas);
     this.resize();
     document.addEventListener('visibilitychange', () => {
@@ -88,6 +99,7 @@ export class Player {
   /** ステージを読み込んで、スタート前の状態にする */
   load(stage: StageDef): void {
     this.state = newGame(stage);
+    this.prev = this.state;
     this.phase = 'ready';
     this.held = false;
     this.pendingPress = false;
@@ -108,6 +120,9 @@ export class Player {
     this.phase = 'playing';
     this.last = performance.now();
     this.acc = 0;
+    this.prev = this.state;
+    this.stats.reset();
+    this.statsSince = 0;
     this.loop();
   }
 
@@ -145,25 +160,42 @@ export class Player {
 
   private loop = (): void => {
     this.raf = requestAnimationFrame((t) => {
-      const dt = Math.min(0.1, (t - this.last) / 1000);
+      const began = this.perf ? performance.now() : 0;
+      const rawGap = t - this.last;
+      const dt = Math.min(0.1, rawGap / 1000);
       this.last = t;
       if (this.phase === 'playing') this.advance(dt);
       else if (this.phase === 'dead' || this.phase === 'cleared') this.settle();
       this.animate(dt);
       this.draw();
+      if (this.perf) this.recordPerf(rawGap, performance.now() - began);
       const resting = (this.phase === 'dead' || this.phase === 'cleared') && this.endedFrames > RESULT_DELAY && this.particles.length === 0;
       if (this.phase === 'playing' || ((this.phase === 'dead' || this.phase === 'cleared') && !resting)) this.loop();
     });
   };
 
+  /** フレームの間隔と処理時間を記録して、30 フレームごとに知らせる(デバッグモードだけ) */
+  private recordPerf(gapMs: number, workMs: number): void {
+    // 最初のフレーム(止まっていた時間をふくむ)は、数えない
+    if (gapMs > 200) return;
+    this.stats.record(gapMs, workMs);
+    this.statsSince += 1;
+    if (this.statsSince >= 30) {
+      this.statsSince = 0;
+      const summary = this.stats.summary();
+      if (summary) this.handlers.onPerf?.(summary);
+    }
+  }
+
   private advance(dt: number): void {
-    this.acc += dt;
-    while (this.acc >= DT && this.state.status === 'running') {
-      const prev = this.state;
-      this.state = step(prev, { pressed: this.pendingPress, held: this.held || this.pendingPress });
+    const t = tick(this.acc, dt);
+    this.acc = t.acc;
+    for (let i = 0; i < t.steps && this.state.status === 'running'; i++) {
+      const before = this.state;
+      this.prev = before;
+      this.state = step(before, { pressed: this.pendingPress, held: this.held || this.pendingPress });
       this.pendingPress = false;
-      this.acc -= DT;
-      this.onStep(prev, this.state);
+      this.onStep(before, this.state);
     }
     this.report();
     if (this.state.status !== 'running') {
@@ -261,7 +293,12 @@ export class Player {
     const s = this.state;
     const theme = themeOf(s);
     const shake = this.reduced ? { x: 0, y: 0 } : shakeOffset(this.shakeLeft, SHAKE_FRAMES, SHAKE_PX, s.frame + this.shakeLeft);
+    // 走っている間は、ひとつ前のステップとのあいだを補って描く(60Hz でも 120Hz でも、なめらかに)
+    const smooth = this.phase === 'playing' && s.status === 'running';
+    const a = smooth ? alphaOf(this.acc) : 1;
     drawScene(this.ctx, this.canvas.width, s, theme, {
+      dist: smooth ? lerp(this.prev.dist, s.dist, a) : undefined,
+      y: smooth ? lerp(this.prev.y, s.y, a) : undefined,
       squash: s.frame - this.landedAt < SQUASH_FRAMES,
       particles: this.particles,
       popups: this.popups,

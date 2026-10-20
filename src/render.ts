@@ -182,6 +182,9 @@ function obstacleColors(kind: ObstacleKind, theme: Theme): [string, string] {
 }
 
 export interface DrawOptions {
+  /** 補間した、走った距離と高さ(なければ state のまま)。画面の更新が速くても、なめらかに動かすため */
+  dist?: number;
+  y?: number;
   /** 着地してすぐ(つぶれた姿にする) */
   squash: boolean;
   /** 演出(省いてよい) */
@@ -202,7 +205,7 @@ export function drawScene(c: CanvasRenderingContext2D, width: number, state: Gam
   const s0 = width / VIEW_W;
   const p: Pen = { c, s: s0, ox: Math.round((opts.shake?.x ?? 0) * s0), oy: Math.round((opts.shake?.y ?? 0) * s0) };
   const { stage } = state;
-  const d = state.dist;
+  const d = opts.dist ?? state.dist;
 
   // 空(横じまの段で、ドット絵らしくする)
   const bandH = GROUND_Y / SKY_BANDS;
@@ -256,7 +259,7 @@ export function drawScene(c: CanvasRenderingContext2D, width: number, state: Gam
   else if (state.grounded) dino = Math.floor(state.frame / 5) % 2 === 0 ? set.runA : set.runB;
   const drawn = opts.squash && state.grounded && state.status === 'running' ? squashed(dino, chibi ? 6 : 9) : dino;
   const x = DINO_SCREEN_X - (dino[0].length * CELL - body.w) / 2;
-  const top = GROUND_Y - state.y - drawn.length * CELL;
+  const top = GROUND_Y - (opts.y ?? state.y) - drawn.length * CELL;
   sprite(p, drawn, x, top, theme.dino);
 
   // 速さの線(肉のレベルが高いほど、多く、長く、速く流れる)
