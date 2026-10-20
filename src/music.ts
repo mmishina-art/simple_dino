@@ -75,6 +75,11 @@ export function setScene(id: SongId | null, opts: { restart?: boolean; delay?: n
   startDesired(opts.delay ?? 0);
 }
 
+/** 曲の音符データを先に用意しておく(鳴らし始める瞬間の負担を減らす) */
+export function prepareMusic(id: SongId): void {
+  eventsByStep(songById(id));
+}
+
 /** 利用者が操作したときに呼ぶ(音を出してよくなる)。止まっていた曲があれば始める */
 export function unlockMusic(): void {
   unlocked = true;

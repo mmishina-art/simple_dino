@@ -208,11 +208,12 @@ test('BGM: タイトルの曲が鳴り、ステージを開くとそのステー
   await toSelect(page);
   await expect.poll(songs).toEqual(['title']);
   await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
-  await expect.poll(songs).toEqual(['title', 'stage1']);
-  // 走り出しても、曲は作り直さない(開始の瞬間に引っかかるため)
-  await page.locator('#game-canvas').tap();
+  // ステージを開いている間(走り出すまで)は、曲を鳴らさない
   await page.waitForTimeout(300);
-  expect(await songs()).toEqual(['title', 'stage1']);
+  expect(await songs()).toEqual(['title']);
+  // 走り出すと、そのステージの曲が頭から始まる
+  await page.locator('#game-canvas').tap();
+  await expect.poll(songs).toEqual(['title', 'stage1']);
   // ぶつかると、BGM は止まる(やられた音が鳴る)。もういちどで、また頭から
   await expect(page.locator('#overlay-title')).toHaveText('ざんねん!', { timeout: 10_000 });
   await page.getByRole('button', { name: 'もういちど' }).click();
@@ -320,6 +321,7 @@ test('エンドレス: 専用の曲が鳴る', async ({ page }) => {
   await page.goto('/');
   await toSelect(page);
   await page.getByRole('button', { name: /エンドレス/ }).click();
+  await page.locator('#game-canvas').tap();
   await expect.poll(() => page.evaluate(() => (window as unknown as { __songs: string[] }).__songs)).toContain('endless');
 });
 
