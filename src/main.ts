@@ -180,12 +180,13 @@ function show(screen: HTMLElement): void {
 
 const status = $('game-status');
 const perfHud = $('perf-hud');
-/** デバッグモードの切り分け: 表示の左下をタップするたびに、描き方を切り替える(自動 → 密度 2 → 密度 1 → 描かない) */
-const RENDER_MODES: readonly { label: string; cap: number | null; off: boolean }[] = [
+/** デバッグモードの切り分け: 表示の左下をタップするたびに、描き方を切り替える(自動 → 密度 2 → 密度 1 → 描かない → 更新だけ) */
+const RENDER_MODES: readonly { label: string; cap: number | null; off: boolean; idle?: boolean }[] = [
   { label: '密度 自動', cap: null, off: false },
   { label: '密度 ×2', cap: 2, off: false },
   { label: '密度 ×1', cap: 1, off: false },
   { label: '描かない', cap: null, off: true },
+  { label: '更新だけ(ゲームも止める)', cap: null, off: true, idle: true },
 ];
 let renderMode = 0;
 let lastPerf = '';
@@ -541,7 +542,7 @@ $('version').textContent = __APP_VERSION__;
 perfHud.addEventListener('click', () => {
   renderMode = (renderMode + 1) % RENDER_MODES.length;
   const m = RENDER_MODES[renderMode];
-  player.setRenderMode(m.cap, m.off);
+  player.setRenderMode(m.cap, m.off, m.idle === true);
   lastPerf = ''; // 新しい描き方の数字が出るまで、前の数字は出さない
   showPerf();
 });

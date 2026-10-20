@@ -659,4 +659,6 @@ button.link {
   border-radius: 6px;
   opacity: 0.85;
   text-align: left;
+  white-space: pre-line;
+  max-width: calc(100% - 12px);
 }

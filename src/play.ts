@@ -79,6 +79,8 @@ export class Player {
   /** デバッグモードの切り分け用: 描く画面の密度の上限(null なら端末のまま)と、描くのをやめる指定 */
   private densityCap: number | null = null;
   private drawOff = false;
+  /** 切り分け用: ゲームを進めず、描きもしない(画面の更新のリズムだけを測る) */
+  private idle = false;
   private readonly stats = new FrameStats(180);
   private statsSince = 0;
 
@@ -154,9 +156,10 @@ export class Player {
   }
 
   /** デバッグモードの切り分け用: 描く画面の密度の上限(null なら端末のまま)。off が true なら、描くのをやめる(ゲームの進行だけ) */
-  setRenderMode(densityCap: number | null, off = false): void {
+  setRenderMode(densityCap: number | null, off = false, idle = false): void {
     this.densityCap = densityCap;
-    this.drawOff = off;
+    this.drawOff = off || idle;
+    this.idle = idle;
     // 描き方を変えたら、数え直す(前の描き方のフレームを、混ぜない)
     this.stats.reset();
     this.statsSince = 0;
@@ -181,7 +184,9 @@ export class Player {
       const rawGap = t - this.last;
       const dt = Math.min(0.1, rawGap / 1000);
       this.last = t;
-      if (this.phase === 'playing') this.advance(dt);
+      if (this.idle && this.phase === 'playing') {
+        // 画面の更新のリズムだけを測る(ゲームは進めない)
+      } else if (this.phase === 'playing') this.advance(dt);
       else if (this.phase === 'dead' || this.phase === 'cleared') this.settle();
       this.animate(dt);
       this.draw();
