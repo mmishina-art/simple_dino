@@ -29,7 +29,25 @@ describe('フレームの時間の記録', () => {
     expect(s.summary()).toBeNull();
   });
 
-  it('表示用の文字にできる', () => {
-    expect(formatPerf({ fps: 119.6, worstMs: 21.4, jankPct: 2.6, workMs: 0.43 })).toBe('FPS 120 ｜ 最悪 21ms ｜ 遅れ 3% ｜ 処理 0.4ms');
+  it('長い停止と、遅れの間隔もまとめる', () => {
+    const s = new FrameStats(120);
+    // 120 フレーム: 10 フレームごとに 1 回、33ms(1 フレーム飛び)。1 回だけ 100ms(長い停止)
+    for (let i = 0; i < 120; i++) s.record(i === 59 ? 100 : i % 10 === 9 ? 33 : 16.7, 0.3);
+    const sum = s.summary();
+    expect(sum?.jankPct).toBeCloseTo((12 / 120) * 100, 5);
+    expect(sum?.stallPct).toBeCloseTo((1 / 120) * 100, 5);
+    // 全体の時間 / 遅れの回数: 約 2 秒 / 12 回 = 約 0.18 秒ごと
+    expect(sum?.lateEverySec).toBeGreaterThan(0.15);
+    expect(sum?.lateEverySec).toBeLessThan(0.25);
+    const none = new FrameStats(10);
+    for (let i = 0; i < 10; i++) none.record(16.7, 0.2);
+    expect(none.summary()?.lateEverySec).toBeNull();
+  });
+
+  it('表示用の文字にできる(2 行)', () => {
+    expect(formatPerf({ fps: 119.6, worstMs: 21.4, jankPct: 2.6, workMs: 0.43, stallPct: 0.4, lateEverySec: 0.84 })).toBe(
+      'FPS 120 ｜ 最悪 21ms ｜ 遅れ 3% ｜ 処理 0.4ms\n長い停止 0% ｜ 遅れの間隔 0.8秒',
+    );
+    expect(formatPerf({ fps: 60, worstMs: 17, jankPct: 0, workMs: 0.2, stallPct: 0, lateEverySec: null })).toContain('遅れの間隔 --');
   });
 });
