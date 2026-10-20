@@ -650,10 +650,13 @@ button.link {
   bottom: 6px;
   margin: 0;
   padding: 2px 6px;
+  min-width: 0;
+  min-height: 0;
   font: 11px/1.3 ui-monospace, monospace;
   color: var(--text);
   background: var(--surface);
+  border: 0;
   border-radius: 6px;
   opacity: 0.85;
-  pointer-events: none;
+  text-align: left;
 }

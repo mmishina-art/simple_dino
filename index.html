@@ -92,8 +92,8 @@
         <div class="stage-wrap">
           <canvas id="game-canvas" class="game-canvas" role="img" aria-label="ゲーム画面。走る恐竜が、サボテンや岩をジャンプでよけます"></canvas>
           <p id="game-hint" class="game-hint">タップでスタート</p>
-          <!-- デバッグモードだけ: フレームの時間(カクつきの調査用) -->
-          <p id="perf-hud" class="perf-hud" aria-hidden="true" hidden></p>
+          <!-- デバッグモードだけ: フレームの時間(カクつきの調査用)。タップで、描き方(画面の密度)を切り替えて、原因を切り分ける -->
+          <button id="perf-hud" type="button" class="perf-hud" aria-hidden="true" tabindex="-1" hidden></button>
         </div>
         <div id="game-pad" class="pad" aria-hidden="true">タップ(スペースキー)でジャンプ<br /><small>押し続けると高く跳べる</small></div>
         <div id="game-overlay" class="overlay" hidden>
