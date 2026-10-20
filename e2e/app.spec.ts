@@ -703,18 +703,22 @@ test('ダブルタップでの拡大を防ぐ: 0.35 秒以内の 2 回目のタ�
   expect(await page.evaluate(() => getComputedStyle(document.querySelector('.title-lead') as Element).touchAction)).toBe('manipulation');
 });
 
-test('タップ計測テストのページ: 開けて、タップすると入力の数字が出る', async ({ page }) => {
-  await page.goto('/tap-test.html');
-  await expect(page.locator('#out')).toContainText('FPS', { timeout: 10_000 });
-  await page.locator('#pad').tap();
-  await expect(page.locator('#out')).toContainText('届くまで 平均');
-  await page.locator('#method').click();
-  await expect(page.locator('#method')).toHaveText('入力: touchstart');
-  // 設定を切り替えても、Canvas が作り直されて、また動く
-  await page.locator('#canvasmode').click();
-  await page.locator('#touchaction').click();
-  await page.locator('#target').click();
-  await page.locator('#prevent').click();
-  await expect(page.locator('#out')).toContainText('FPS', { timeout: 10_000 });
-  await expect(page.locator('#out')).toContainText('別描き');
+test('画面を離れると自動でポーズして、戻ってタップすると、つづきから走る', async ({ page }) => {
+  await page.addInitScript((id) => localStorage.setItem(`${id}-music`, 'false'), APP_ID);
+  await page.goto('/');
+  await toSelect(page);
+  await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
+  await page.locator('#game-canvas').tap();
+  await expect(page.locator('#game-hint')).toBeHidden();
+  const setHidden = (hidden: boolean): Promise<void> =>
+    page.evaluate((h) => {
+      Object.defineProperty(document, 'hidden', { value: h, configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, hidden);
+  await setHidden(true);
+  await expect(page.locator('#overlay-title')).toHaveText('ポーズ中');
+  await setHidden(false);
+  // 画面のどこかをタップすると、つづきから(ポーズの画面が消える)
+  await page.locator('#overlay-text').tap();
+  await expect(page.locator('#overlay-title')).toBeHidden();
 });

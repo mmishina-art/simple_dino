@@ -253,6 +253,7 @@ const player = new Player(
       ]);
     },
     onMeat: () => sfx('meat'),
+    onPause: () => showOverlay('ポーズ中', '画面をタップするとつづきから', [{ label: 'つづける', primary: true, run: () => pressInput() }]),
     onProgress: (info) => {
       if (!current.endless) {
         setBar(Math.round(info.ratio * 100));
@@ -453,11 +454,6 @@ document.addEventListener('keydown', (e) => {
 });
 document.addEventListener('keyup', (e) => {
   if (['Space', 'ArrowUp', 'KeyW'].includes(e.code)) player.release();
-});
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden && player.phase === 'paused') {
-    showOverlay('ポーズ中', '画面をタップするとつづきから', [{ label: 'つづける', primary: true, run: () => pressInput() }]);
-  }
 });
 $('game-back').addEventListener('click', closeStage);
 

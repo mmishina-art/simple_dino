@@ -1,5 +1,5 @@
 // ステージのデータ。配置は文字列で書く(トークンを空白で区切る):
-//   S / B / R / T … 障害物をその位置に置く(src/game.ts の OBSTACLE_SIZES)
+//   S / B / R / T … 障害物をその位置に置く(src/logic.ts の OBSTACLE_SIZES)
 //   数字         … 進む時間(ミリ秒)。先頭の数字は最初の障害物までの時間、末尾の数字はゴールまでの時間
 // ミリ秒で書くので、速さが変わっても「ジャンプのリズム」の感覚をそろえやすい。
 import { OBSTACLE_SIZES, type Egg, type Obstacle, type ObstacleKind, type StageDef } from './logic';
