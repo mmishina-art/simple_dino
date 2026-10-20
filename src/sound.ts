@@ -44,11 +44,10 @@ export function beep(frequency = 660, seconds = 0.08): void {
 }
 
 /** ゲームの効果音。音の高さと並びだけで作る(音声ファイルは持たない) */
-export type Sfx = 'jump' | 'land' | 'dead' | 'clear' | 'start' | 'egg' | 'near' | 'meat';
+export type Sfx = 'jump' | 'dead' | 'clear' | 'start' | 'egg' | 'near' | 'meat';
 
 const SEQUENCES: Record<Sfx, readonly (readonly [number, number])[]> = {
   jump: [[520, 0.09]],
-  land: [[180, 0.04]],
   dead: [[220, 0.12], [160, 0.12], [110, 0.25]],
   clear: [[523, 0.1], [659, 0.1], [784, 0.1], [1047, 0.3]],
   start: [[440, 0.07], [660, 0.1]],

@@ -4,7 +4,7 @@ import { CHARACTERS, characterById, forCharacter, isCharacterUnlocked, sanitizeC
 import { createEndless } from './endless';
 import { scoreMultiplier } from './logic';
 import { Player } from './play';
-import { formatInput, formatPerf } from './perf';
+import { DebugPanel } from './debug';
 import {
   allCleared, bestOf, isCleared, isUnlocked, markEndingSeen, recordAttempt, recordClear, recordDeath, recordEndless, sanitizeProgress, starsOf, totalAttempts, totalStars, type Progress,
 } from './progress';
@@ -115,20 +115,7 @@ const starText = (n: number): string => '★'.repeat(n) + '☆'.repeat(3 - n);
 function renderStageList(): void {
   renderCharacters();
   $('debug-note').hidden = !debug;
-  // デバッグモードのときだけ、フレームの時間を記録して、ゲーム画面に出す
-  player.perf = debug;
-  perfHud.hidden = !debug;
-  $('input-method').hidden = !debug;
-  if (!debug && renderMode !== 0) {
-    renderMode = 0;
-    player.setRenderMode(null);
-  }
-  if (!debug && inputMethod !== 0) {
-    inputMethod = 0;
-    setTouchInput(false);
-    $('input-method').textContent = `入力: ${INPUT_METHODS[0]}`;
-  }
-  showPerf();
+  debugPanel.apply(debug);
   const list = $('stage-list');
   list.replaceChildren();
   for (const stage of STAGES) {
@@ -185,23 +172,6 @@ function show(screen: HTMLElement): void {
 // ---- ゲーム画面 ----
 
 const status = $('game-status');
-const perfHud = $('perf-hud');
-/** デバッグモードの切り分け: 表示の左下をタップするたびに、描き方を切り替える(自動 → 密度 2 → 密度 1 → 描かない → 更新だけ) */
-const RENDER_MODES: readonly { label: string; cap: number | null; off: boolean; idle?: boolean }[] = [
-  { label: '密度 自動', cap: null, off: false },
-  { label: '密度 ×2', cap: 2, off: false },
-  { label: '密度 ×1', cap: 1, off: false },
-  { label: '描かない', cap: null, off: true },
-  { label: '更新だけ(ゲームも止める)', cap: null, off: true, idle: true },
-];
-let renderMode = 0;
-let lastPerf = '';
-/** デバッグモードの切り分け: 画面を押したときの受け方(pointerdown / touchstart)。左上のボタンで切り替える */
-const INPUT_METHODS = ['pointerdown', 'touchstart'] as const;
-let inputMethod = 0;
-const showPerf = (): void => {
-  perfHud.textContent = `${lastPerf || 'FPS --'} ｜ ${RENDER_MODES[renderMode].label}\n${formatInput(player.inputStats.summary(), INPUT_METHODS[inputMethod])}`;
-};
 const progressBar = $('progress-bar');
 let barPercent = -1;
 /** 進み具合の棒の幅。毎フレームは書かない(値が変わったときだけ。書くたびに、画面の組み直しが起きるため) */
@@ -219,7 +189,6 @@ const player = new Player(
   canvas,
   {
     onJump: () => sfx('jump'),
-    onLand: () => undefined,
     onEgg: (count, total) => {
       if (count > 0) sfx('egg');
       $('egg-count').textContent = `${count}/${total}`;
@@ -284,10 +253,7 @@ const player = new Player(
       ]);
     },
     onMeat: () => sfx('meat'),
-    onPerf: (summary) => {
-      lastPerf = formatPerf(summary);
-      showPerf();
-    },
+    onPerf: (summary) => debugPanel.setPerf(summary),
     onProgress: (info) => {
       if (!current.endless) {
         setBar(Math.round(info.ratio * 100));
@@ -309,6 +275,7 @@ const player = new Player(
   },
   current,
 );
+const debugPanel = new DebugPanel(player, $('perf-hud'), $('input-method'), (on) => setTouchInput(on));
 
 interface OverlayButton {
   label: string;
@@ -476,7 +443,7 @@ for (const el of [title, select, ending]) el.addEventListener('touchend', guardD
 
 /** 画面を押した。受け方(pointerdown / touchstart)のどちらでも、同じ処理にする。デバッグモードのときは、届くまでの遅れと処理の時間を記録する */
 function onPress(e: Event, method: number): void {
-  if (method !== inputMethod || isControl(e.target)) return;
+  if (method !== debugPanel.method || isControl(e.target)) return;
   const began = performance.now();
   e.preventDefault();
   pressInput();
@@ -501,7 +468,7 @@ function setTouchInput(on: boolean): void {
 }
 for (const type of ['pointerup', 'pointercancel', 'pointerleave'] as const) {
   game.addEventListener(type, () => {
-    if (inputMethod === 0) player.release();
+    if (debugPanel.method === 0) player.release();
   });
 }
 document.addEventListener('keydown', (e) => {
@@ -560,7 +527,8 @@ $<HTMLInputElement>('backup-import').addEventListener('change', async (e) => {
     const n = importBackup(await file.text());
     syncSound();
     syncMusic();
-    character = isUnlockedChar(sanitizeCharacterId(load<unknown>('character', 'dino'))) ? sanitizeCharacterId(load<unknown>('character', 'dino')) : 'dino';
+    const saved = sanitizeCharacterId(load<unknown>('character', 'dino'));
+    character = isUnlockedChar(saved) ? saved : 'dino';
     progress = loadProgress();
     renderToggles();
     renderStageList();
@@ -572,22 +540,6 @@ $<HTMLInputElement>('backup-import').addEventListener('change', async (e) => {
 });
 
 $('version').textContent = __APP_VERSION__;
-
-$('input-method').addEventListener('click', () => {
-  inputMethod = (inputMethod + 1) % INPUT_METHODS.length;
-  setTouchInput(inputMethod === 1);
-  player.inputStats.reset();
-  $('input-method').textContent = `入力: ${INPUT_METHODS[inputMethod]}`;
-  showPerf();
-});
-
-perfHud.addEventListener('click', () => {
-  renderMode = (renderMode + 1) % RENDER_MODES.length;
-  const m = RENDER_MODES[renderMode];
-  player.setRenderMode(m.cap, m.off, m.idle === true);
-  lastPerf = ''; // 新しい描き方の数字が出るまで、前の数字は出さない
-  showPerf();
-});
 
 // 「新しい版を確認する」: すぐに確認して、結果を知らせる(新版があれば、「更新」ボタンが出る)
 const UPDATE_MESSAGES: Record<UpdateResult, string> = {

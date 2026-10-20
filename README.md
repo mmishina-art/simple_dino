@@ -63,6 +63,7 @@ npx playwright install chromium && npm run test:e2e
 | `src/progress.ts` | どこまでクリアしたか・ベストの進み具合・取ったたまご・★の記録と、ステージの解放のルール(純関数) |
 | `src/ending.ts` | タイトル・エンディング画面の絵の動き(`render.ts` の `drawTitle` / `drawEnding` で描く) |
 | `src/main.ts` | 画面の切り替え(ステージ選択、ゲーム、結果) |
+| `src/debug.ts` | デバッグモードの表示と、カクつきを調べるための切り替え(フレームの時間・描き方・入力の受け方) |
 | `src/sound.ts` | 効果音(Web Audio で合成。音声ファイルは持たない) |
 | `src/songs.ts` | BGM の曲のデータ(メロディー・コード・リズム)と、演奏イベントを作る純関数 |
 | `src/music.ts` | BGM の演奏(先読みして音を予約する) |
