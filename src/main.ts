@@ -84,6 +84,9 @@ function setCharacter(id: CharacterId): void {
 function renderCharacters(): void {
   const box = $('character-picker');
   box.replaceChildren();
+  // ちびダイノは、遊べるようになるまで、見せない(キャラ選択ごと隠す)
+  box.hidden = !isUnlockedChar('chibi');
+  if (box.hidden) return;
   for (const c of CHARACTERS) {
     const open = isUnlockedChar(c.id);
     const button = document.createElement('button');

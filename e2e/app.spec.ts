@@ -520,8 +520,9 @@ test('ちびダイノ: 全クリア前は鍵つき。全クリアすると選べ
   await page.goto('/');
   await toSelect(page);
   const chibi = page.getByRole('button', { name: /ちびダイノ/ });
-  await expect(chibi).toBeDisabled();
-  await expect(page.getByRole('button', { name: /^ダイノ/ })).toHaveAttribute('aria-pressed', 'true');
+  // 全クリアするまでは、ちびダイノも、キャラ選択も、見せない
+  await expect(chibi).toHaveCount(0);
+  await expect(page.locator('#character-picker')).toBeHidden();
   await expect(page.locator('#endless-open')).toBeVisible();
 
   // ダイノで全ステージクリアした記録にして、読み込み直す
@@ -530,6 +531,8 @@ test('ちびダイノ: 全クリア前は鍵つき。全クリアすると選べ
   }, APP_ID);
   await page.reload();
   await toSelect(page);
+  await expect(page.locator('#character-picker')).toBeVisible();
+  await expect(page.getByRole('button', { name: /^ダイノ/ })).toHaveAttribute('aria-pressed', 'true');
   await expect(chibi).toBeEnabled();
   await chibi.click();
   await expect(chibi).toHaveAttribute('aria-pressed', 'true');
@@ -587,7 +590,6 @@ test('デバッグモード(隠しコマンド): バージョンを 7 回タッ�
   await expect(page.locator('#title-summary')).toHaveText('デバッグモード: オフ');
   await toSelect(page);
   await expect(page.locator('#debug-note')).toBeHidden();
-  await expect(page.getByRole('button', { name: /ちびダイノ/ })).toBeDisabled();
+  await expect(page.locator('#character-picker')).toBeHidden();
   await expect(page.getByRole('button', { name: 'ステージ10 ラスト' })).toBeDisabled();
-  await expect(page.getByRole('button', { name: /^ダイノ/ })).toHaveAttribute('aria-pressed', 'true');
 });
