@@ -8,6 +8,15 @@ import { findPlan } from '../tests/solver';
 // アプリの ID（package.json の name）。保存データのキーの接頭辞になる
 const APP_ID = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { name: string }).name;
 
+/** ダイノで全ステージをクリアした記録にする(エンドレスが遊べる)。読み込み前に呼ぶ */
+async function clearAllStages(page: Page): Promise<void> {
+  await page.addInitScript((id) => {
+    if (!localStorage.getItem(`${id}-progress`)) {
+      localStorage.setItem(`${id}-progress`, JSON.stringify({ cleared: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], attempts: {}, firstClearTries: {}, endingSeen: true }));
+    }
+  }, APP_ID);
+}
+
 /** タイトルから「あそぶ」でステージ選択に進む */
 async function toSelect(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'あそぶ' }).click();
@@ -284,6 +293,7 @@ test('演出: たまごを取ると効果音が鳴る', async ({ page }) => {
 });
 
 test('エンドレス: ステージ選択から始められ、ぶつかると走った距離が出て、ハイスコアが保存される', async ({ page }) => {
+  await clearAllStages(page);
   await page.goto('/');
   await toSelect(page);
   await expect(page.locator('#endless-best')).toHaveText('ハイスコアなし');
@@ -314,6 +324,7 @@ test('エンドレス: ステージ選択から始められ、ぶつかると走
 });
 
 test('エンドレス: 専用の曲が鳴る', async ({ page }) => {
+  await clearAllStages(page);
   await page.addInitScript(() => {
     (window as unknown as { __songs: string[] }).__songs = [];
     document.addEventListener('app:music', (e) => (window as unknown as { __songs: string[] }).__songs.push((e as CustomEvent).detail.song));
@@ -326,6 +337,7 @@ test('エンドレス: 専用の曲が鳴る', async ({ page }) => {
 });
 
 test('エンドレス: ソルバーの押し方で、最初の肉の手前まで走りつづけると、スコアが増える', async ({ page }) => {
+  await clearAllStages(page);
   test.setTimeout(120_000);
   // コースの種を固定する(乱数を 0.5 に固定すると、種は 2^30)
   await page.addInitScript(() => { Math.random = () => 0.5; });
@@ -362,6 +374,7 @@ test('エンドレス: ソルバーの押し方で、最初の肉の手前まで
 });
 
 test('エンドレス: 肉を取ると、レベルと倍率が出て、スコアのふえ方が大きくなり、効き目の棒がへっていく', async ({ page }) => {
+  await clearAllStages(page);
   test.setTimeout(120_000);
   await page.addInitScript(() => { Math.random = () => 0.5; });
   const seed = Math.floor(0.5 * 2 ** 31);
@@ -531,7 +544,8 @@ test('ちびダイノ: 全クリア前は鍵つき。全クリアすると選べ
   // 全クリアするまでは、ちびダイノも、キャラ選択も、見せない
   await expect(chibi).toHaveCount(0);
   await expect(page.locator('#character-picker')).toBeHidden();
-  await expect(page.locator('#endless-open')).toBeVisible();
+  // エンドレスも、全クリアするまでは見せない
+  await expect(page.locator('#endless-open')).toBeHidden();
 
   // ダイノで全ステージクリアした記録にして、読み込み直す
   await page.evaluate((id) => {
@@ -540,6 +554,7 @@ test('ちびダイノ: 全クリア前は鍵つき。全クリアすると選べ
   await page.reload();
   await toSelect(page);
   await expect(page.locator('#character-picker')).toBeVisible();
+  await expect(page.locator('#endless-open')).toBeVisible();
   await expect(page.getByRole('button', { name: /^ダイノ/ })).toHaveAttribute('aria-pressed', 'true');
   await expect(chibi).toBeEnabled();
   await chibi.click();
@@ -721,4 +736,32 @@ test('画面を離れると自動でポーズして、戻ってタップする�
   // 画面のどこかをタップすると、つづきから(ポーズの画面が消える)
   await page.locator('#overlay-text').tap();
   await expect(page.locator('#overlay-title')).toBeHidden();
+});
+
+test('エンドレス: ダイノで全ステージをクリアするまでは見えない。クリアすると遊べる。デバッグモードでは、最初から遊べる', async ({ page }) => {
+  await page.goto('/');
+  await toSelect(page);
+  await expect(page.locator('#endless-open')).toBeHidden();
+  // 9 ステージまででは、まだ
+  await page.evaluate((id) => {
+    localStorage.setItem(`${id}-progress`, JSON.stringify({ cleared: [1, 2, 3, 4, 5, 6, 7, 8, 9], attempts: {}, firstClearTries: {}, endingSeen: false }));
+  }, APP_ID);
+  await page.reload();
+  await toSelect(page);
+  await expect(page.locator('#endless-open')).toBeHidden();
+  // 全部クリア
+  await page.evaluate((id) => {
+    localStorage.setItem(`${id}-progress`, JSON.stringify({ cleared: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], attempts: {}, firstClearTries: {}, endingSeen: true }));
+  }, APP_ID);
+  await page.reload();
+  await toSelect(page);
+  await expect(page.locator('#endless-open')).toBeVisible();
+  // デバッグモード(記録は消して、最初の状態にする)
+  await page.evaluate((id) => {
+    localStorage.removeItem(`${id}-progress`);
+    localStorage.setItem(`${id}-debug`, 'true');
+  }, APP_ID);
+  await page.reload();
+  await toSelect(page);
+  await expect(page.locator('#endless-open')).toBeVisible();
 });
