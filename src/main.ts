@@ -4,6 +4,7 @@ import { CHARACTERS, characterById, forCharacter, isCharacterUnlocked, sanitizeC
 import { createEndless } from './endless';
 import { scoreMultiplier } from './logic';
 import { Player } from './play';
+import { formatPerf } from './perf';
 import {
   allCleared, bestOf, isCleared, isUnlocked, markEndingSeen, recordAttempt, recordClear, recordDeath, recordEndless, sanitizeProgress, starsOf, totalAttempts, totalStars, type Progress,
 } from './progress';
@@ -121,6 +122,9 @@ const starText = (n: number): string => '★'.repeat(n) + '☆'.repeat(3 - n);
 function renderStageList(): void {
   renderCharacters();
   $('debug-note').hidden = !debug;
+  // デバッグモードのときだけ、フレームの時間(FPS など)を記録して、ゲーム画面に出す
+  player.perf = debug;
+  perfHud.hidden = !debug;
   const list = $('stage-list');
   list.replaceChildren();
   for (const stage of STAGES) {
@@ -177,6 +181,7 @@ function show(screen: HTMLElement): void {
 // ---- ゲーム画面 ----
 
 const status = $('game-status');
+const perfHud = $('perf-hud');
 const progressBar = $('progress-bar');
 let barPercent = -1;
 /** 進み具合の棒の幅。毎フレームは書かない(値が変わったときだけ。書くたびに、画面の組み直しが起きるため) */
@@ -260,6 +265,9 @@ const player = new Player(
       ]);
     },
     onMeat: () => sfx('meat'),
+    onPerf: (summary) => {
+      perfHud.textContent = formatPerf(summary);
+    },
     onPause: () => showOverlay('ポーズ中', '画面をタップするとつづきから', [{ label: 'つづける', primary: true, run: () => pressInput() }]),
     onProgress: (info) => {
       if (!current.endless) {

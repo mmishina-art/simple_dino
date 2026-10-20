@@ -10,6 +10,7 @@ import {
 import { DINO_SCREEN_X, GROUND_Y, VIEW_H, VIEW_W, drawScene } from './render';
 import { meters } from './endless';
 import { alphaOf, lerp, tick } from './clock';
+import { FrameStats, type PerfSummary } from './perf';
 import { themeOf } from './themes';
 
 export type Phase = 'ready' | 'playing' | 'paused' | 'dead' | 'cleared';
@@ -44,6 +45,8 @@ export interface PlayHandlers {
   onProgress(info: RunInfo): void;
   /** 画面を離れて、自動でポーズした(再開の案内を出す) */
   onPause(): void;
+  /** デバッグモード: フレームの時間のまとめ(30 フレームごと) */
+  onPerf?(summary: PerfSummary): void;
 }
 
 /** やられた・ゴールしたあと、結果を出すまでの間(フレーム数) */
@@ -73,6 +76,10 @@ export class Player {
   private popups: Popup[] = [];
   private shakeLeft = 0;
   private readonly minClear = new Map<number, number>();
+  /** デバッグモードで、フレームの時間(FPS など)を記録する */
+  perf = false;
+  private readonly stats = new FrameStats(120);
+  private statsSince = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly handlers: PlayHandlers, stage: StageDef) {
     const ctx = canvas.getContext('2d');
@@ -116,6 +123,8 @@ export class Player {
     this.last = performance.now();
     this.acc = 0;
     this.prev = this.state;
+    this.stats.reset();
+    this.statsSince = 0;
     this.loop();
   }
 
@@ -160,16 +169,33 @@ export class Player {
     // そのまま 2 つ・3 つと増えてしまい(押すたびに +1)、1 フレームに何度も描いて、重くなる
     cancelAnimationFrame(this.raf);
     this.raf = requestAnimationFrame((t) => {
-      const dt = Math.min(0.1, (t - this.last) / 1000);
+      const began = this.perf ? performance.now() : 0;
+      const rawGap = t - this.last;
+      const dt = Math.min(0.1, rawGap / 1000);
       this.last = t;
       if (this.phase === 'playing') this.advance(dt);
       else if (this.phase === 'dead' || this.phase === 'cleared') this.settle();
       this.animate(dt);
       this.draw();
+      // 数えるのは、走っているあいだだけ(やられた瞬間の、結果の画面を出す処理などを、混ぜない)
+      if (this.perf && this.phase === 'playing') this.recordPerf(rawGap, performance.now() - began);
       const resting = (this.phase === 'dead' || this.phase === 'cleared') && this.endedFrames > RESULT_DELAY && this.particles.length === 0;
       if (this.phase === 'playing' || ((this.phase === 'dead' || this.phase === 'cleared') && !resting)) this.loop();
     });
   };
+
+  /** フレームの間隔と処理時間を記録して、30 フレームごとに知らせる(デバッグモードだけ) */
+  private recordPerf(gapMs: number, workMs: number): void {
+    // 最初のフレーム(止まっていた時間をふくむ)は、数えない
+    if (gapMs > 200) return;
+    this.stats.record(gapMs, workMs);
+    this.statsSince += 1;
+    if (this.statsSince >= 30) {
+      this.statsSince = 0;
+      const summary = this.stats.summary();
+      if (summary) this.handlers.onPerf?.(summary);
+    }
+  }
 
   private advance(dt: number): void {
     const t = tick(this.acc, dt);
