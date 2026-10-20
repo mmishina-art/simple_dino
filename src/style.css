@@ -363,6 +363,11 @@ button.link {
   margin: 4px 0;
 }
 
+/* 「ステージ選択」は、遊びつづけるボタンから離す(連続で遊ぶとき、押し間違えないように)。ほかのボタンの位置は変えない */
+.overlay-buttons .away {
+  margin-top: clamp(12px, 4.5dvh, 44px);
+}
+
 .pad {
   flex: 1;
   min-height: 120px;

@@ -195,7 +195,7 @@ const player = new Player(
         status.textContent = `ゲームオーバー。${points}点。${detail}。${line}`;
         showOverlay('ざんねん!', `${points} 点\n${detail}\n${line}`, [
           { label: 'もういちど', primary: true, run: () => restart() },
-          { label: 'ステージ選択', run: () => closeStage() },
+          { label: 'ステージ選択', away: true, run: () => closeStage() },
         ]);
         return;
       }
@@ -207,7 +207,7 @@ const player = new Player(
       status.textContent = `ゲームオーバー。${percent}パーセントまで進みました。${line}`;
       showOverlay('ざんねん!', `${percent}% まで進んだ\n${line}\nたまご ${eggs}/${current.eggs.length}`, [
         { label: 'もういちど', primary: true, run: () => restart() },
-        { label: 'ステージ選択', run: () => closeStage() },
+        { label: 'ステージ選択', away: true, run: () => closeStage() },
       ]);
     },
     onCleared: ({ eggs }) => {
@@ -238,7 +238,7 @@ const player = new Player(
         ...(next ? [{ label: 'つぎのステージ', primary: true, run: () => openStage(next) }] : []),
         ...(last && allCleared(progress, STAGES.length) ? [{ label: 'エンディング', primary: true, run: () => openEnding() }] : []),
         { label: 'もういちど', run: () => restart() },
-        { label: 'ステージ選択', run: () => closeStage() },
+        { label: 'ステージ選択', away: true, run: () => closeStage() },
       ]);
     },
     onMeat: () => sfx('meat'),
@@ -267,6 +267,8 @@ const player = new Player(
 interface OverlayButton {
   label: string;
   primary?: boolean;
+  /** 画面のいちばん下に離して置く(遊びつづける流れから外れる操作。押し間違えないように) */
+  away?: boolean;
   run: () => void;
 }
 
@@ -280,6 +282,7 @@ function showOverlay(title: string, text: string, buttons: readonly OverlayButto
     el.type = 'button';
     el.textContent = b.label;
     if (b.primary) el.className = 'primary';
+    if (b.away) el.classList.add('away');
     el.addEventListener('click', b.run);
     box.append(el);
   }
