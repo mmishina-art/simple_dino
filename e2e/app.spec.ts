@@ -556,7 +556,7 @@ test('起動できないときは「なおす」ボタンが出て、押すと�
   expect(await page.evaluate(() => caches.has('other-app-v1'))).toBe(true);
 });
 
-test('ちびダイノ: 全クリア前は鍵つき。全クリアすると選べて、記録はキャラごとに別で、エンドレスは出ない', async ({ page }) => {
+test('ちびダイノ: 全クリア前は鍵つき。全クリアすると選べて、記録はキャラごとに別で、エンドレスは、ちびでも出る', async ({ page }) => {
   await page.goto('/');
   await toSelect(page);
   const chibi = page.getByRole('button', { name: /ちびダイノ/ });
@@ -578,10 +578,12 @@ test('ちびダイノ: 全クリア前は鍵つき。全クリアすると選べ
   await expect(chibi).toBeEnabled();
   await chibi.click();
   await expect(chibi).toHaveAttribute('aria-pressed', 'true');
-  // ちびの記録は別: まだステージ 1 しか遊べない。エンドレスと、エンディングは出ない
+  // ちびの記録は別: まだステージ 1 しか遊べない。エンディングは出ない。エンドレスは、ちびでも出る(ハイスコアは、キャラごと)
   await expect(page.locator('#progress-summary')).toContainText('クリア 0/10');
   await expect(page.getByRole('button', { name: 'ステージ2 さばく' })).toBeDisabled();
-  await expect(page.locator('#endless-open')).toBeHidden();
+  await expect(page.locator('#ending-open')).toBeHidden();
+  await expect(page.locator('#endless-open')).toBeVisible();
+  await expect(page.locator('#endless-best')).toHaveText('ハイスコアなし');
 
   // ちびで遊ぶ: 絵と速さが変わる(タイトルに「・ちび」)。選んだキャラは、読み込み直しても残る
   await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
