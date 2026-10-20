@@ -125,6 +125,7 @@ function renderStageList(): void {
   }
   if (!debug && inputMethod !== 0) {
     inputMethod = 0;
+    setTouchInput(false);
     $('input-method').textContent = `入力: ${INPUT_METHODS[0]}`;
   }
   showPerf();
@@ -479,13 +480,22 @@ function onPress(e: Event, method: number): void {
   if (debug) player.inputStats.record(began - e.timeStamp, performance.now() - began);
 }
 game.addEventListener('pointerdown', (e) => onPress(e, 0));
-game.addEventListener('touchstart', (e) => onPress(e, 1), { passive: false });
-game.addEventListener('touchend', () => {
-  if (inputMethod === 1) player.release();
-});
-game.addEventListener('touchcancel', () => {
-  if (inputMethod === 1) player.release();
-});
+
+// touchstart で受けるのは、デバッグモードで切り替えたときだけ。止める可能性のあるタッチの受け皿(passive: false)が、いつもあると、
+// iPhone のブラウザは、タッチのたびに、その処理を待つ。ふだんは付けない。
+const onTouchStart = (e: TouchEvent): void => onPress(e, 1);
+const onTouchRelease = (): void => player.release();
+function setTouchInput(on: boolean): void {
+  if (on) {
+    game.addEventListener('touchstart', onTouchStart, { passive: false });
+    game.addEventListener('touchend', onTouchRelease);
+    game.addEventListener('touchcancel', onTouchRelease);
+  } else {
+    game.removeEventListener('touchstart', onTouchStart);
+    game.removeEventListener('touchend', onTouchRelease);
+    game.removeEventListener('touchcancel', onTouchRelease);
+  }
+}
 for (const type of ['pointerup', 'pointercancel', 'pointerleave'] as const) {
   game.addEventListener(type, () => {
     if (inputMethod === 0) player.release();
@@ -562,6 +572,7 @@ $('version').textContent = __APP_VERSION__;
 
 $('input-method').addEventListener('click', () => {
   inputMethod = (inputMethod + 1) % INPUT_METHODS.length;
+  setTouchInput(inputMethod === 1);
   player.inputStats.reset();
   $('input-method').textContent = `入力: ${INPUT_METHODS[inputMethod]}`;
   showPerf();
