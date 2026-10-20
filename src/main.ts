@@ -147,8 +147,8 @@ function renderStageList(): void {
   const stars = `★ ${totalStars(progress, STAGES.map((s) => s.eggs.length))}/${STAGES.length * 3}`;
   $('progress-summary').textContent = done ? `★ ぜんぶクリア! (${STAGES.length}/${STAGES.length}) ・ ${stars}` : `クリア ${progress.cleared.length}/${STAGES.length} ・ ${stars}`;
   $('ending-open').hidden = !done || character !== 'dino';
-  // エンドレスは、ダイノだけ(速さを、ステージごとに決めているため)
-  $('endless-open').hidden = character !== 'dino';
+  // エンドレスは、ダイノだけ(速さを、ステージごとに決めているため)。ダイノで全ステージをクリアすると遊べる(ちびダイノと同じ)
+  $('endless-open').hidden = character !== 'dino' || !(debug || done);
   $('endless-best').textContent = progress.endlessBest > 0 ? `ハイスコア ${progress.endlessBest} 点` : 'ハイスコアなし';
   $('title-summary').textContent = progress.cleared.length > 0 ? `つづき: ${done ? '★ ぜんぶクリア!' : `クリア ${progress.cleared.length}/${STAGES.length}`}` : '';
 }
@@ -244,7 +244,7 @@ const player = new Player(
       if (stars === 1) lines.push('たまごを全部取ると ★2');
       else if (stars === 2) lines.push('1回で全部取ると ★3');
       if (first && next) lines.push(`ステージ${next.id}が遊べるようになった`);
-      if (first && last && character === 'dino') lines.push('ちびダイノが遊べるようになった!');
+      if (first && last && character === 'dino') lines.push('ちびダイノと、エンドレスが\n遊べるようになった!');
       showOverlay('ステージクリア!', lines.join('\n'), [
         ...(next ? [{ label: 'つぎのステージ', primary: true, run: () => openStage(next) }] : []),
         ...(last && allCleared(progress, STAGES.length) ? [{ label: 'エンディング', primary: true, run: () => openEnding() }] : []),
@@ -390,7 +390,7 @@ function openEnding(): void {
   hideOverlay();
   show(ending);
   setScene('ending', { restart: true, delay: 1.4 });
-  $('ending-stats').textContent = `ぜんぶで ${totalAttempts(progress)} 回、挑戦しました\nちびダイノが仲間になった!\nステージ選択でえらべます`;
+  $('ending-stats').textContent = `ぜんぶで ${totalAttempts(progress)} 回、挑戦しました\nちびダイノが仲間になった!\nエンドレスも遊べるようになった!\nステージ選択でえらべます`;
   stopEnding?.();
   stopEnding = startEnding($<HTMLCanvasElement>('ending-canvas'));
   sfx('clear');
