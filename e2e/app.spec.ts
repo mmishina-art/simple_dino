@@ -739,6 +739,14 @@ test('デバッグモード: 入力の受け方(pointerdown / touchstart)を切�
   await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
   await expect(page.locator('#input-method')).toHaveText('入力: pointerdown');
   await expect(page.locator('#perf-hud')).toContainText('入力 まだなし ｜ 方式 pointerdown');
+  // ふだん(pointerdown)は、止める可能性のある touchstart の受け皿を付けない(付けると、iPhone は、タッチのたびに待つため)
+  const prevented = await page.evaluate(() => {
+    const e = new Event('touchstart', { bubbles: true, cancelable: true });
+    (document.getElementById('game-canvas') as Element).dispatchEvent(e);
+    return e.defaultPrevented;
+  });
+  expect(prevented).toBe(false);
+  await expect(page.locator('#game-hint')).toBeVisible();
   await page.locator('#input-method').click();
   await expect(page.locator('#input-method')).toHaveText('入力: touchstart');
   await expect(page.locator('#perf-hud')).toContainText('方式 touchstart');
