@@ -761,3 +761,12 @@ test('デバッグモード: 入力の受け方(pointerdown / touchstart)を切�
   await page.touchscreen.tap(box.x + box.width / 2, box.y + 60);
   await expect(page.locator('#perf-hud')).toContainText(/入力 届くまで 平均 [\d.]+ms 最大 [\d.]+ms ｜ 受付の処理 最大 [\d.]+ms ｜ 方式 touchstart/);
 });
+
+test('タップ計測テストのページ: 開けて、タップすると入力の数字が出る', async ({ page }) => {
+  await page.goto('/tap-test.html');
+  await expect(page.locator('#out')).toContainText('FPS', { timeout: 10_000 });
+  await page.locator('#pad').tap();
+  await expect(page.locator('#out')).toContainText('届くまで 平均');
+  await page.locator('#method').click();
+  await expect(page.locator('#method')).toHaveText('入力: touchstart');
+});

@@ -68,6 +68,10 @@ npx playwright install chromium && npm run test:e2e
 | `src/music.ts` | BGM の演奏(先読みして音を予約する) |
 | `tests/solver.ts` | ステージが「解ける」こと(たまごを全部取る経路や、エンドレスのコースも)を確かめる、総当たりのソルバー(テスト用) |
 
+## タップ計測テストのページ
+
+ゲームとは別の、ほぼ何もしないページ `tap-test.html`(公開 URL の末尾に `tap-test.html` をつけて開く)です。全画面の Canvas で白い四角を動かし、タップしたフレームだけが遅れるかを数字で出します。ゲームでのカクつきが、iOS / iPadOS そのものによるものか、アプリの処理によるものかを切り分けるためのものです(`public/tap-test.html`)。
+
 ## ステージの難しさを変えるとき
 
 ステージの配置は `src/stages.ts` の文字列です(`S`・`B`・`R`・`T` が障害物、数字が進む時間のミリ秒)。変えたら `npm test` を実行します。`tests/stages.test.ts` が、すべてのステージで
