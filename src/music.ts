@@ -54,7 +54,6 @@ export function setMusicOn(on: boolean, persist = true): void {
   else stopRunning();
 }
 
-/** いまの場面の曲を伝える。restart が true なら、同じ曲でも頭から。delay は鳴らし始めるまでの秒数 */
 /** テンポを、曲の何倍にするか変える。いま鳴っている曲も、リズムをとぎらせずに、すぐ変わる */
 export function setMusicTempo(factor: number): void {
   tempo = factor;
@@ -66,6 +65,7 @@ export function setMusicTempo(factor: number): void {
   r.t0 = nextTime - r.next * r.stepSec;
 }
 
+/** いまの場面の曲を伝える。restart が true なら、同じ曲でも頭から。delay は鳴らし始めるまでの秒数 */
 export function setScene(id: SongId | null, opts: { restart?: boolean; delay?: number } = {}): void {
   const same = desired === id && running?.id === id;
   desired = id;

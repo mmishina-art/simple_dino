@@ -130,10 +130,10 @@ export interface StageDef {
   extend?: (upTo: number) => void;
 }
 
-/** 恐竜の前に、これだけ先(px)まで、障害物を用意しておく */
 /** そのステージの、恐竜の当たり判定の大きさ */
 export const bodyOf = (stage: StageDef): Body => stage.body ?? DINO_BODY;
 
+/** 恐竜の前に、これだけ先(px)まで、障害物を用意しておく */
 export const EXTEND_AHEAD = 1400;
 
 export type Status = 'running' | 'dead' | 'cleared';

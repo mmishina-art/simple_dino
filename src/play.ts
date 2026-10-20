@@ -32,7 +32,6 @@ export interface RunInfo {
 
 export interface PlayHandlers {
   onJump(): void;
-  onLand(): void;
   /** たまごを取った。count はこの回に取った数、total はそのステージの数 */
   onEgg(count: number, total: number): void;
   /** 障害物をぎりぎりで越えた */
@@ -99,10 +98,6 @@ export class Player {
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && this.phase === 'playing') this.pause();
     });
-  }
-
-  get stage(): StageDef {
-    return this.state.stage;
   }
 
   /** ステージを読み込んで、スタート前の状態にする */
@@ -247,7 +242,6 @@ export class Player {
     }
     if (!prev.grounded && s.grounded) {
       this.landedAt = s.frame;
-      this.handlers.onLand();
       this.spawn(dust(feet.x, feet.y, 6, theme.groundLine, Math.random));
     }
     // 走っている間の、小さな土ぼこり
