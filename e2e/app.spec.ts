@@ -635,3 +635,42 @@ test('新版の確認: アプリに戻ったとき・「新しい版を確認す
   // 新版はないので、「更新」の案内は出ない
   await expect(page.locator('#update-banner')).toBeHidden();
 });
+
+test.describe('描くループ', () => {
+  // やられた演出の粒(動きを減らす設定では出ない)が残っているあいだだけ起きるので、動きを減らさない
+  test.use({ reducedMotion: 'no-preference' });
+
+  test('「もういちど」を早く何度も押しても、描くループは 1 つのまま(1 秒に画面の更新の回数だけ)', async ({ page }) => {
+    await page.addInitScript((id) => {
+      localStorage.setItem(`${id}-music`, 'false');
+      localStorage.setItem(`${id}-progress`, JSON.stringify({ cleared: [1, 2, 3, 4, 5, 6, 7, 8, 9], attempts: {}, firstClearTries: {}, endingSeen: false }));
+      const w = window as unknown as { __callbacks: number };
+      w.__callbacks = 0;
+      const raf = window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame = (cb) => raf((t) => {
+        w.__callbacks += 1;
+        cb(t);
+      });
+    }, APP_ID);
+    await page.goto('/');
+    await toSelect(page);
+    await page.getByRole('button', { name: 'ステージ10 ラスト' }).click();
+    await page.locator('#game-canvas').tap();
+    const perSecond = async (): Promise<number> => {
+      await page.evaluate(() => { (window as unknown as { __callbacks: number }).__callbacks = 0; });
+      await page.waitForTimeout(1000);
+      return page.evaluate(() => (window as unknown as { __callbacks: number }).__callbacks);
+    };
+    const before = await perSecond();
+    // 結果が出た瞬間に「もういちど」を押す(やられた演出のループが残っているうちに)。これを 3 回くりかえす
+    for (let i = 0; i < 3; i++) {
+      await page.locator('#overlay-title').waitFor({ state: 'visible', timeout: 15_000 });
+      await page.evaluate(() => {
+        [...document.querySelectorAll<HTMLButtonElement>('.overlay-buttons button')].find((b) => b.textContent === 'もういちど')?.click();
+      });
+    }
+    const after = await perSecond();
+    // ループが増えると、押すたびに 1 秒の回数が 1 つぶんずつ増える(60 → 120 → 180 → 240)
+    expect(after).toBeLessThan(before * 1.5);
+  });
+});

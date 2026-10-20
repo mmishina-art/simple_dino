@@ -159,6 +159,9 @@ export class Player {
   }
 
   private loop = (): void => {
+    // 動いているループは、いつも 1 つだけにする。「もういちど」を早く押すと、前のループがまだ残っていて、
+    // そのまま 2 つ・3 つと増えてしまい(押すたびに +1)、1 フレームに何度も描いて、重くなる
+    cancelAnimationFrame(this.raf);
     this.raf = requestAnimationFrame((t) => {
       const began = this.perf ? performance.now() : 0;
       const rawGap = t - this.last;
