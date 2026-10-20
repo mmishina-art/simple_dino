@@ -102,7 +102,7 @@ function pillar(w: number, h: number): Sprite {
   return rows;
 }
 
-/** たまご: k はふち、# は黄身いろ、o はつや。大きさは当たり判定(EGG_W × EGG_H)と同じ */
+/** たまご: k はふち、# は白い殻、o は影(つや)。大きさは当たり判定(EGG_W × EGG_H)と同じ */
 export const EGG: Sprite = [
   '..kkk..',
   '.k###k.',

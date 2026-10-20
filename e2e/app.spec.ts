@@ -208,20 +208,22 @@ test('BGM: タイトルの曲が鳴り、ステージを開くとそのステー
   await toSelect(page);
   await expect.poll(songs).toEqual(['title']);
   await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
-  await expect.poll(songs).toEqual(['title', 'stage1']);
-  // 走り出すと、曲が頭から始まる
+  // ステージを開いている間(走り出すまで)は、曲を鳴らさない
+  await page.waitForTimeout(300);
+  expect(await songs()).toEqual(['title']);
+  // 走り出すと、そのステージの曲が頭から始まる
   await page.locator('#game-canvas').tap();
-  await expect.poll(songs).toEqual(['title', 'stage1', 'stage1']);
+  await expect.poll(songs).toEqual(['title', 'stage1']);
   // ぶつかると、BGM は止まる(やられた音が鳴る)。もういちどで、また頭から
   await expect(page.locator('#overlay-title')).toHaveText('ざんねん!', { timeout: 10_000 });
   await page.getByRole('button', { name: 'もういちど' }).click();
-  await expect.poll(songs).toEqual(['title', 'stage1', 'stage1', 'stage1']);
+  await expect.poll(songs).toEqual(['title', 'stage1', 'stage1']);
   // ゲーム画面の BGM ボタンでオフにする
   await page.locator('#music-button-game').click();
   await expect(page.locator('#music-button-game')).toHaveAttribute('aria-pressed', 'false');
   await page.getByRole('button', { name: 'ステージ選択にもどる' }).click();
   await page.waitForTimeout(300);
-  expect((await songs()).length).toBe(4);
+  expect((await songs()).length).toBe(3);
 });
 
 test('BGM のオン/オフは、タイトルで切り替えられ、再読み込みしても残る', async ({ page }) => {
@@ -294,7 +296,7 @@ test('エンドレス: ステージ選択から始められ、ぶつかると走
   await page.locator('#game-canvas').tap();
   await expect(page.locator('#overlay-title')).toHaveText('ざんねん!', { timeout: 10_000 });
   await expect(page.locator('#overlay-text')).toContainText(/\d+ 点/);
-  await expect(page.locator('#overlay-text')).toContainText(/\d+ m 走った・肉 0個/);
+  await expect(page.locator('#overlay-text')).toContainText(/\d+ m 走った\s*肉 0個/);
   await expect(page.locator('#overlay-text')).toContainText('ハイスコア更新!');
   // もういちど: すぐに新しいコースで走り出す
   await page.getByRole('button', { name: 'もういちど' }).click();
@@ -319,6 +321,7 @@ test('エンドレス: 専用の曲が鳴る', async ({ page }) => {
   await page.goto('/');
   await toSelect(page);
   await page.getByRole('button', { name: /エンドレス/ }).click();
+  await page.locator('#game-canvas').tap();
   await expect.poll(() => page.evaluate(() => (window as unknown as { __songs: string[] }).__songs)).toContain('endless');
 });
 
@@ -597,4 +600,125 @@ test('デバッグモード(隠しコマンド): バージョンを 7 回タッ�
   await expect(page.locator('#debug-note')).toBeHidden();
   await expect(page.locator('#character-picker')).toBeHidden();
   await expect(page.getByRole('button', { name: 'ステージ10 ラスト' })).toBeDisabled();
+});
+
+test('新版の確認: アプリに戻ったとき・「新しい版を確認する」で、Service Worker に確認させる(間隔をおく)', async ({ page }) => {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __updates: number };
+    w.__updates = 0;
+    const update = ServiceWorkerRegistration.prototype.update;
+    ServiceWorkerRegistration.prototype.update = function (this: ServiceWorkerRegistration) {
+      w.__updates += 1;
+      return update.call(this);
+    };
+  });
+  await page.goto('/');
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  const count = (): Promise<number> => page.evaluate(() => (window as unknown as { __updates: number }).__updates);
+  // 登録がすんだあと、アプリに戻ってきたら、確認する。すぐにまた戻っても、見送る(通信しすぎない)
+  await expect.poll(async () => {
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    return count();
+  }).toBe(1);
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  expect(await count()).toBe(1);
+
+  // ボタンは、間隔をおかずに確認して、結果を知らせる
+  await page.getByRole('button', { name: '新しい版を確認する' }).click();
+  await expect(page.locator('#update-message')).toHaveText('これが最新の版です');
+  expect(await count()).toBe(2);
+  // 新版はないので、「更新」の案内は出ない
+  await expect(page.locator('#update-banner')).toBeHidden();
+});
+
+test.describe('描くループ', () => {
+  // やられた演出の粒(動きを減らす設定では出ない)が残っているあいだだけ起きるので、動きを減らさない
+  test.use({ reducedMotion: 'no-preference' });
+
+  test('「もういちど」を早く何度も押しても、描くループは 1 つのまま(1 秒に画面の更新の回数だけ)', async ({ page }) => {
+    await page.addInitScript((id) => {
+      localStorage.setItem(`${id}-music`, 'false');
+      localStorage.setItem(`${id}-progress`, JSON.stringify({ cleared: [1, 2, 3, 4, 5, 6, 7, 8, 9], attempts: {}, firstClearTries: {}, endingSeen: false }));
+      const w = window as unknown as { __callbacks: number };
+      w.__callbacks = 0;
+      const raf = window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame = (cb) => raf((t) => {
+        w.__callbacks += 1;
+        cb(t);
+      });
+    }, APP_ID);
+    await page.goto('/');
+    await toSelect(page);
+    await page.getByRole('button', { name: 'ステージ10 ラスト' }).click();
+    await page.locator('#game-canvas').tap();
+    const perSecond = async (): Promise<number> => {
+      await page.evaluate(() => { (window as unknown as { __callbacks: number }).__callbacks = 0; });
+      await page.waitForTimeout(1000);
+      return page.evaluate(() => (window as unknown as { __callbacks: number }).__callbacks);
+    };
+    const before = await perSecond();
+    // 結果が出た瞬間に「もういちど」を押す(やられた演出のループが残っているうちに)。これを 3 回くりかえす
+    for (let i = 0; i < 3; i++) {
+      await page.locator('#overlay-title').waitFor({ state: 'visible', timeout: 15_000 });
+      await page.evaluate(() => {
+        [...document.querySelectorAll<HTMLButtonElement>('.overlay-buttons button')].find((b) => b.textContent === 'もういちど')?.click();
+      });
+    }
+    const after = await perSecond();
+    // ループが増えると、押すたびに 1 秒の回数が 1 つぶんずつ増える(60 → 120 → 180 → 240)
+    expect(after).toBeLessThan(before * 1.5);
+  });
+});
+
+test('ダブルタップでの拡大を防ぐ: 0.35 秒以内の 2 回目のタップ(touchend)は止める。ボタンは止めない', async ({ page }) => {
+  await page.goto('/');
+  const result = await page.evaluate(() => {
+    const fire = (el: Element): boolean => {
+      const e = new Event('touchend', { bubbles: true, cancelable: true });
+      el.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    const text = document.querySelector('.title-lead') as Element;
+    const button = document.getElementById('play-button') as Element;
+    const first = fire(text);
+    const second = fire(text); // すぐ続けた 2 回目: 止める
+    const onButton = fire(button); // ボタンは、すぐ続けても止めない
+    return { first, second, onButton };
+  });
+  expect(result).toEqual({ first: false, second: true, onButton: false });
+  // ゲーム画面には、この止める処理を付けない(touch-action: none で拡大されない。タッチのたびに待たせない)
+  await page.getByRole('button', { name: 'あそぶ' }).click();
+  await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
+  const inGame = await page.evaluate(() => {
+    const canvas = document.getElementById('game-canvas') as Element;
+    const fire = (): boolean => {
+      const e = new Event('touchend', { bubbles: true, cancelable: true });
+      canvas.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    return { first: fire(), second: fire(), touchAction: getComputedStyle(document.getElementById('screen-game') as Element).touchAction };
+  });
+  expect(inGame).toEqual({ first: false, second: false, touchAction: 'none' });
+  // CSS でも、すべての要素で、ダブルタップ拡大だけを防いでいる
+  expect(await page.evaluate(() => getComputedStyle(document.querySelector('.title-lead') as Element).touchAction)).toBe('manipulation');
+});
+
+test('画面を離れると自動でポーズして、戻ってタップすると、つづきから走る', async ({ page }) => {
+  await page.addInitScript((id) => localStorage.setItem(`${id}-music`, 'false'), APP_ID);
+  await page.goto('/');
+  await toSelect(page);
+  await page.getByRole('button', { name: 'ステージ1 そうげん' }).click();
+  await page.locator('#game-canvas').tap();
+  await expect(page.locator('#game-hint')).toBeHidden();
+  const setHidden = (hidden: boolean): Promise<void> =>
+    page.evaluate((h) => {
+      Object.defineProperty(document, 'hidden', { value: h, configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, hidden);
+  await setHidden(true);
+  await expect(page.locator('#overlay-title')).toHaveText('ポーズ中');
+  await setHidden(false);
+  // 画面のどこかをタップすると、つづきから(ポーズの画面が消える)
+  await page.locator('#overlay-text').tap();
+  await expect(page.locator('#overlay-title')).toBeHidden();
 });
