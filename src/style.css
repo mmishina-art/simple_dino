@@ -14,6 +14,9 @@
   --primary: #3f7d3a;
   --primary-text: #ffffff;
   --boost: #d9643a;
+  /* たまごの色(ゲーム画面の中は src/render.ts の EGG_WHITE / EGG_SHADE。同じ色にそろえる) */
+  --egg-white: #ffffff;
+  --egg-shade: #c9d3e3;
 }
 
 * {
@@ -515,6 +518,24 @@ button.link {
   font-size: 0.85rem;
 }
 
+.egg-icon {
+  width: 0.9em;
+  height: 1.03em;
+  vertical-align: -0.12em;
+}
+
+.egg-edge {
+  fill: var(--text);
+}
+
+.egg-body {
+  fill: var(--egg-white);
+}
+
+.egg-shine {
+  fill: var(--egg-shade);
+}
+
 .egg-counter {
   margin-left: auto;
   font-weight: 700;
@@ -544,10 +565,12 @@ button.link {
   line-height: 1.25;
 }
 
+/* 長い名前は 2 行まで折り返す(1 行だと「ステージ1…」と切れて、どのステージか分からなくなる) */
 .hud-title {
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
   font-size: 0.95rem;
 }
 
