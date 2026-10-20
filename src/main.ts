@@ -430,6 +430,20 @@ function pressInput(): void {
   }
 }
 
+// ダブルタップでの画面の拡大を防ぐ(iPhone)。CSS の touch-action だけでは、防げないことがある。
+// 前のタップから 0.35 秒以内の 2 回目のタップは、ブラウザの標準の動き(拡大)を止める。ボタンやリンクは、止めない(押せなくなるため)。
+// ピンチでの拡大は、そのまま使える。ジャンプは pointerdown で受けるので、影響しない。
+let lastTouchEnd = 0;
+document.addEventListener(
+  'touchend',
+  (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd < 350 && !isControl(e.target) && e.cancelable) e.preventDefault();
+    lastTouchEnd = now;
+  },
+  { passive: false },
+);
+
 game.addEventListener('pointerdown', (e) => {
   if (isControl(e.target)) return;
   e.preventDefault();
@@ -523,7 +537,7 @@ $('update-check').addEventListener('click', async () => {
 // 隠しコマンド: バージョン表示を 3 秒以内に 7 回タップ → デバッグモードのオン/オフ
 const SECRET_TAPS = 7;
 let taps: number[] = [];
-$('version').parentElement?.addEventListener('click', () => {
+$('version').parentElement?.addEventListener('pointerup', () => {
   const now = Date.now();
   taps = [...taps.filter((t) => now - t < 3000), now];
   if (taps.length < SECRET_TAPS) return;

@@ -19,6 +19,8 @@
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
+  /* ダブルタップ拡大だけ防ぐ(ピンチ拡大は許可)。iPhone は、親にだけ指定しても効かないことがあるので、すべての要素に付ける */
+  touch-action: manipulation;
 }
 
 /* display を指定した要素でも hidden 属性で確実に隠す */

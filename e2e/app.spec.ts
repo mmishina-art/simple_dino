@@ -674,3 +674,23 @@ test.describe('描くループ', () => {
     expect(after).toBeLessThan(before * 1.5);
   });
 });
+
+test('ダブルタップでの拡大を防ぐ: 0.35 秒以内の 2 回目のタップ(touchend)は止める。ボタンは止めない', async ({ page }) => {
+  await page.goto('/');
+  const result = await page.evaluate(() => {
+    const fire = (el: Element): boolean => {
+      const e = new Event('touchend', { bubbles: true, cancelable: true });
+      el.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    const text = document.querySelector('.title-lead') as Element;
+    const button = document.getElementById('play-button') as Element;
+    const first = fire(text);
+    const second = fire(text); // すぐ続けた 2 回目: 止める
+    const onButton = fire(button); // ボタンは、すぐ続けても止めない
+    return { first, second, onButton };
+  });
+  expect(result).toEqual({ first: false, second: true, onButton: false });
+  // CSS でも、すべての要素で、ダブルタップ拡大だけを防いでいる
+  expect(await page.evaluate(() => getComputedStyle(document.querySelector('.title-lead') as Element).touchAction)).toBe('manipulation');
+});
