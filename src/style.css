@@ -598,6 +598,8 @@ button.link {
   -webkit-line-clamp: 2;
   overflow: hidden;
   font-size: 0.95rem;
+  /* 「ステージ1 そうげん」は、スペースの所だけで折り返す(名前の途中で切らない) */
+  word-break: keep-all;
 }
 
 .hud-best {
@@ -706,4 +708,9 @@ button.link {
   opacity: 0.85;
   pointer-events: none;
   max-width: calc(100% - 12px);
+}
+
+/* 数字が出るまでは、空の枠を見せない */
+.perf-hud:empty {
+  display: none;
 }
