@@ -4,7 +4,6 @@ import { CHARACTERS, characterById, forCharacter, isCharacterUnlocked, sanitizeC
 import { createEndless } from './endless';
 import { scoreMultiplier } from './logic';
 import { Player } from './play';
-import { DebugPanel } from './debug';
 import {
   allCleared, bestOf, isCleared, isUnlocked, markEndingSeen, recordAttempt, recordClear, recordDeath, recordEndless, sanitizeProgress, starsOf, totalAttempts, totalStars, type Progress,
 } from './progress';
@@ -115,7 +114,6 @@ const starText = (n: number): string => '★'.repeat(n) + '☆'.repeat(3 - n);
 function renderStageList(): void {
   renderCharacters();
   $('debug-note').hidden = !debug;
-  debugPanel.apply(debug);
   const list = $('stage-list');
   list.replaceChildren();
   for (const stage of STAGES) {
@@ -253,7 +251,6 @@ const player = new Player(
       ]);
     },
     onMeat: () => sfx('meat'),
-    onPerf: (summary) => debugPanel.setPerf(summary),
     onProgress: (info) => {
       if (!current.endless) {
         setBar(Math.round(info.ratio * 100));
@@ -275,7 +272,6 @@ const player = new Player(
   },
   current,
 );
-const debugPanel = new DebugPanel(player, $('perf-hud'), $('input-method'), (on) => setTouchInput(on));
 
 interface OverlayButton {
   label: string;
@@ -441,36 +437,12 @@ const guardDoubleTapZoom = (e: TouchEvent): void => {
 };
 for (const el of [title, select, ending]) el.addEventListener('touchend', guardDoubleTapZoom, { passive: false });
 
-/** 画面を押した。受け方(pointerdown / touchstart)のどちらでも、同じ処理にする。デバッグモードのときは、届くまでの遅れと処理の時間を記録する */
-function onPress(e: Event, method: number): void {
-  if (method !== debugPanel.method || isControl(e.target)) return;
-  const began = performance.now();
+game.addEventListener('pointerdown', (e) => {
+  if (isControl(e.target)) return;
   e.preventDefault();
   pressInput();
-  if (debug) player.inputStats.record(began - e.timeStamp, performance.now() - began);
-}
-game.addEventListener('pointerdown', (e) => onPress(e, 0));
-
-// touchstart で受けるのは、デバッグモードで切り替えたときだけ。止める可能性のあるタッチの受け皿(passive: false)が、いつもあると、
-// iPhone のブラウザは、タッチのたびに、その処理を待つ。ふだんは付けない。
-const onTouchStart = (e: TouchEvent): void => onPress(e, 1);
-const onTouchRelease = (): void => player.release();
-function setTouchInput(on: boolean): void {
-  if (on) {
-    game.addEventListener('touchstart', onTouchStart, { passive: false });
-    game.addEventListener('touchend', onTouchRelease);
-    game.addEventListener('touchcancel', onTouchRelease);
-  } else {
-    game.removeEventListener('touchstart', onTouchStart);
-    game.removeEventListener('touchend', onTouchRelease);
-    game.removeEventListener('touchcancel', onTouchRelease);
-  }
-}
-for (const type of ['pointerup', 'pointercancel', 'pointerleave'] as const) {
-  game.addEventListener(type, () => {
-    if (debugPanel.method === 0) player.release();
-  });
-}
+});
+for (const type of ['pointerup', 'pointercancel', 'pointerleave'] as const) game.addEventListener(type, () => player.release());
 document.addEventListener('keydown', (e) => {
   if (game.hidden || e.repeat || !['Space', 'ArrowUp', 'KeyW'].includes(e.code)) return;
   if (isControl(e.target)) return;
