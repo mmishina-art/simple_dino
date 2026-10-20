@@ -1,9 +1,9 @@
 // Canvas への描画。ゲームの状態(GameState)を絵にするだけで、ルールには触れない。
 // 座標は論理 px(横 VIEW_W × 縦 VIEW_H)。実際の画面の大きさに合わせて、scale 倍で描く。
 // ドット絵がにじまないよう、四角は端末の px にそろえて塗る。
-import { DINO_BODY, EGG_H, EGG_W, MEAT_H, MEAT_W, OBSTACLE_SIZES, bodyOf, type GameState, type ObstacleKind } from './logic';
+import { DINO_BODY, EGG_H, EGG_W, MEAT_H, MEAT_W, OBSTACLE_SIZES, bodyOffset, bodyOfState, type GameState, type ObstacleKind } from './logic';
 import type { Particle, Popup } from './fx';
-import { DINO, DINO_CHIBI, EGG, MEAT, SPRITES, squashed, type Sprite } from './sprites';
+import { DINO, DINO_CHIBI, DINO_CHIBI_ORIG, DINO_EVO, EGG, MEAT, SPRITES, squashed, type Sprite } from './sprites';
 import { THEMES, type Theme } from './themes';
 
 export const VIEW_W = 400;
@@ -201,6 +201,22 @@ const MEAT_BONE = '#ffe3bd';
 const EGG_WHITE = '#ffffff';
 const EGG_SHADE = '#c9d3e3';
 
+type DinoSet = Record<'stand' | 'runA' | 'runB' | 'dead', Sprite>;
+interface Form {
+  set: DinoSet;
+  /** 着地でつぶれた姿にするとき、抜く行 */
+  squashRow: number;
+  /** 絵の 'o'(角やとげ)の色。なければ、体と同じ色 */
+  accent?: string;
+}
+/** エンドレスの、肉のレベルごとの姿(体の大きさは、src/logic.ts の BOOST_BODIES と同じ順) */
+const BOOST_FORMS: readonly Form[] = [
+  { set: DINO_CHIBI_ORIG, squashRow: 4 },
+  { set: DINO_CHIBI, squashRow: 6 },
+  { set: DINO, squashRow: 9 },
+  { set: DINO_EVO, squashRow: 11, accent: MEAT_COLOR },
+];
+
 export function drawScene(c: CanvasRenderingContext2D, width: number, state: GameState, theme: Theme, opts: DrawOptions): void {
   const s0 = width / VIEW_W;
   const p: Pen = { c, s: s0, ox: Math.round((opts.shake?.x ?? 0) * s0), oy: Math.round((opts.shake?.y ?? 0) * s0) };
@@ -250,17 +266,18 @@ export function drawScene(c: CanvasRenderingContext2D, width: number, state: Gam
     else rect(p, x + 8, top - 6, 3, 3, spark);
   });
 
-  // 恐竜(当たり判定は絵より少し小さく、絵の中央にある)。判定がダイノより小さいときは、ちびダイノの絵
-  const body = bodyOf(stage);
-  const chibi = body.w < DINO_BODY.w;
-  const set = chibi ? DINO_CHIBI : DINO;
+  // 恐竜(当たり判定は絵より少し小さく、絵の中央にある)。エンドレスは、肉のレベルで姿が変わる。
+  // ほかは、判定がダイノより小さいときは、ちびダイノの絵
+  const body = bodyOfState(state);
+  const form: Form = stage.endless ? BOOST_FORMS[state.boost] : { set: body.w < DINO_BODY.w ? DINO_CHIBI : DINO, squashRow: body.w < DINO_BODY.w ? 6 : 9 };
+  const set = form.set;
   let dino: Sprite = set.stand;
   if (state.status === 'dead') dino = set.dead;
   else if (state.grounded) dino = Math.floor(state.frame / 5) % 2 === 0 ? set.runA : set.runB;
-  const drawn = opts.squash && state.grounded && state.status === 'running' ? squashed(dino, chibi ? 6 : 9) : dino;
-  const x = DINO_SCREEN_X - (dino[0].length * CELL - body.w) / 2;
+  const drawn = opts.squash && state.grounded && state.status === 'running' ? squashed(dino, form.squashRow) : dino;
+  const x = DINO_SCREEN_X + bodyOffset(stage, body) - (dino[0].length * CELL - body.w) / 2;
   const top = GROUND_Y - (opts.y ?? state.y) - drawn.length * CELL;
-  sprite(p, drawn, x, top, theme.dino);
+  sprite(p, drawn, x, top, theme.dino, form.accent ?? theme.dino);
 
   // 速さの線(肉のレベルが高いほど、多く、長く、速く流れる)
   const level = opts.speedLines ?? 0;

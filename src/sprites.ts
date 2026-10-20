@@ -62,6 +62,65 @@ export const DINO_CHIBI = {
   dead: [...CHIBI_DEAD_BODY, ...CHIBI_LEGS.stand],
 } as const satisfies Record<string, Sprite>;
 
+/**
+ * 元のちびダイノ(エンドレスで、肉をまだ取っていないときの姿): ダイノを縮めただけの、いちばん小さい絵。10 × 8 マス(20 × 16 px)。
+ */
+const CHIBI_ORIG_BODY: Sprite = [
+  '......###.',
+  '.....#####',
+  '.....#.###',
+  '#...######',
+  '##.#####..',
+  '.#######..',
+];
+const CHIBI_ORIG_DEAD_BODY: Sprite = CHIBI_ORIG_BODY.map((row, i) => (i === 1 ? '.....#.#.#' : i === 2 ? '.....#####' : row));
+const CHIBI_ORIG_LEGS = {
+  stand: ['..##.##...', '..##.##...'],
+  runA: ['..##.##...', '..##......'],
+  runB: ['..##.##...', '.....##...'],
+} as const;
+
+export const DINO_CHIBI_ORIG = {
+  stand: [...CHIBI_ORIG_BODY, ...CHIBI_ORIG_LEGS.stand],
+  runA: [...CHIBI_ORIG_BODY, ...CHIBI_ORIG_LEGS.runA],
+  runB: [...CHIBI_ORIG_BODY, ...CHIBI_ORIG_LEGS.runB],
+  dead: [...CHIBI_ORIG_DEAD_BODY, ...CHIBI_ORIG_LEGS.stand],
+} as const satisfies Record<string, Sprite>;
+
+/**
+ * 進化したダイノ(エンドレスで、肉のレベルが最大のときの姿): ダイノを大きくして、頭に角、背中にとげ('o' はアクセントの色)をつけた絵。
+ * 16 × 15 マス(32 × 30 px)。
+ */
+const EVO_BODY: Sprite = [
+  '..........o..o..',
+  '.........######.',
+  '........########',
+  '........##.#####',
+  '........########',
+  '........###.....',
+  '........###.....',
+  '.......o#######.',
+  '#.....o####.....',
+  '##....#####..#..',
+  '##o.o.#####..#..',
+  '.##########.....',
+  '..#########.....',
+];
+/** やられた顔: 目が × のようになる */
+const EVO_DEAD_BODY: Sprite = EVO_BODY.map((row, i) => (i === 2 || i === 4 ? '........#.#.####' : row));
+const EVO_LEGS = {
+  stand: ['...###..##......', '...###..##......'],
+  runA: ['...###..##......', '...###..........'],
+  runB: ['...###..##......', '........###.....'],
+} as const;
+
+export const DINO_EVO = {
+  stand: [...EVO_BODY, ...EVO_LEGS.stand],
+  runA: [...EVO_BODY, ...EVO_LEGS.runA],
+  runB: [...EVO_BODY, ...EVO_LEGS.runB],
+  dead: [...EVO_DEAD_BODY, ...EVO_LEGS.stand],
+} as const satisfies Record<string, Sprite>;
+
 /** 着地でつぶれた姿: 体の 1 行(row 行め)を抜いて、1 マス低くする */
 export function squashed(sprite: Sprite, row = 9): Sprite {
   return sprite.filter((_, i) => i !== row);
