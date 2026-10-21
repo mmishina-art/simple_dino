@@ -46,7 +46,7 @@ npm run verify       # lint → test → build → check:dist
 npx playwright install chromium && npm run test:e2e
 ```
 
-ルールの詳細は [CLAUDE.md](./CLAUDE.md) を参照してください。
+ルールの詳細は [CLAUDE.md](./CLAUDE.md) を参照してください。実機で見つかった不具合の調査(仮説・やったこと・結果・結論)は、[docs/investigations.md](./docs/investigations.md) に残しています。
 
 ## ファイル構成
 
